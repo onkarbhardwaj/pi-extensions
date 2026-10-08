@@ -1,10 +1,11 @@
 # Pi extensions
 
-Three extensions for [Pi](https://pi.dev), each with its own commands and setup:
+Four extensions for [Pi](https://pi.dev), each with its own commands and setup:
 
 - [Pipill](packages/pipill/README.md): keep session reminders visible and let the agent manage them.
 - [Diff-review](packages/diff-review/README.md): select code changes and prepare review comments with `/d`.
 - [Annotate](packages/annotate/README.md): comment on earlier conversation messages with `/a` or `/annotate`.
+- [Reference widget](packages/reference-widget/README.md): keep Markdown references in a session bar and read/comment on rendered content with `/ref`; the agent uses `reference_widget`.
 
 ## Install
 
@@ -19,7 +20,7 @@ before switching to avoid duplicate command and tool registrations.
 The individual npm packages are not yet published.
 
 Pipill has optional ticket-prefix configuration. Diff-review needs local repository
-paths and base refs. Annotate needs no configuration. See each extension's README
+paths and base refs. Annotate and Reference widget need no configuration. See each extension's README
 for commands, controls, and setup.
 
 You can ask Pi: “Read this extension's README, tell me what information you need,
@@ -41,9 +42,10 @@ Try one extension without installing it:
 pi -e ./packages/pipill
 pi -e ./packages/diff-review
 pi -e ./packages/annotate
+pi -e ./packages/reference-widget
 ```
 
-The repository is an npm workspace with three separately versioned packages.
+The repository is an npm workspace with four separately versioned packages.
 Pi loads their TypeScript directly; no build step is needed.
 Each package declares its Pi entry point and host-provided peer dependencies.
 Package archives exclude tests and personal configuration.
