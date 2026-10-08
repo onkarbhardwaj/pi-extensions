@@ -2,13 +2,12 @@
 
 Session reminder pills for Pi. Keep topics visible without switching conversations,
 add short descriptions, and inspect or remove them through a terminal panel or the
-model-callable `pipill` tool. No persona or other extension is required.
+model-callable `pipill` tool.
 
 ## Load
 
 From this repository, use `pi -e ./packages/pipill` for one run or
 `pi install ./packages/pipill` for a persistent local installation.
-After npm publication: `pi install npm:@onkarbhardwaj/pi-pipill`.
 
 ## Configure
 
@@ -38,7 +37,7 @@ context before each prompt.
 Ask Pi: “Read pipill's README and config example. Ask me which ticket prefixes I use,
 then help create my configuration.” Reload Pi with `/reload` after changing config.
 Missing config uses the neutral default; malformed config reports an extension-load
-error instead of silently applying company-specific defaults.
+error.
 
 ## Use
 
@@ -54,9 +53,8 @@ provide more context.
 
 The widget appears below the editor in terminal mode. Click a pill to inspect it;
 use Tab/Enter, Escape, or the mouse in the panel. The `(d)` button appears only when
-diff-review reports availability in the current terminal session. Without that
-extension, neither the button nor its click region is present. An unaccepted open
-request is silently ignored.
+diff-review is available in the current terminal session. Click it to review the
+branch matching that pill's label.
 
 Pills are saved as custom session entries and restored on resume. They are shared
 across navigation within that session, not stored in this package or a global JSON
@@ -64,8 +62,7 @@ file. A session without a saved conversation may have memory-only pills.
 The tool and prompt context also work without terminal UI; panels require terminal mode.
 
 Other extensions may query current labels through the read-only `pi-pills:current`
-event with the current `sessionId`. Pipill does not require a consumer of that event;
-it returns labels only for the matching active session.
+event with the current `sessionId`. It returns labels only for the matching active session.
 
 ## Test
 
