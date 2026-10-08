@@ -18,7 +18,7 @@ export default function referenceWidget(pi: ExtensionAPI) {
         invalidate() { regions = []; },
         render(width: number) {
           if (width < 1) return [];
-          regions = []; let line = truncateToWidth('Refs [+]', width);
+          regions = []; let line = truncateToWidth('[+]', width);
           regions.push({ x: 0, width: visibleWidth(line), add: true });
           const names = labels(paths);
           for (let i = 0; i < paths.length; i++) {
