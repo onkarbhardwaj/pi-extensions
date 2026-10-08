@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "ticketPrefixes": [],
+  "repositories": [
+    {
+      "name": "my-project",
+      "path": "~/workspaces/my-project",
+      "defaultBase": "origin/main"
+    }
+  ]
+}

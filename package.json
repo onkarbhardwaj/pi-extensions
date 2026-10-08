@@ -1,0 +1,19 @@
+{
+  "name": "pi-extensions-workspace",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces",
+    "pack:check": "npm pack --dry-run --workspaces"
+  },
+  "pi": {
+    "extensions": [
+      "./packages/pipill/src/index.ts",
+      "./packages/diff-review/src/index.ts",
+      "./packages/annotate/src/index.ts"
+    ]
+  }
+}
