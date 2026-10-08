@@ -2,13 +2,11 @@
 
 Interactive local diff review for Pi. Find a checked-out branch across known repositories,
 inspect its committed and working changes, select code ranges, and attach comments.
-No Tao reminder or pipill installation is required.
 
 ## Load
 
 From this repository, use `pi -e ./packages/diff-review` for one run or
 `pi install ./packages/diff-review` for a persistent local installation.
-After npm publication: `pi install npm:@onkarbhardwaj/pi-diff-review`.
 
 Requires Git and Pi's interactive terminal mode.
 
@@ -42,7 +40,7 @@ An empty `ticketPrefixes` list uses case-sensitive literal branch-substring matc
 Set—for example—`["PROJ", "OPS"]` to match recognized ticket IDs case-insensitively
 and exactly: `PROJ-12` must not select `PROJ-123`. Keys use letters, digits, or
 underscores, starting with a letter, without the hyphen. The field may be omitted
-and defaults to an empty list. It is independent of pipill's configuration.
+and defaults to an empty list.
 
 Ask Pi: “Read diff-review's README and config example. Ask me which local repositories,
 base refs, and optional ticket prefixes to use, then help create my configuration.”
@@ -75,7 +73,6 @@ Review output includes excerpts, comments, worktree metadata, and content-hash p
 inspect it before sending, particularly when reviewing private code.
 
 If pipill is also loaded, its `(d)` button can open a review using the pill label.
-This is optional and does not share configuration between extensions.
 
 ## Test
 

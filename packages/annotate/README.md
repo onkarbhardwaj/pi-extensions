@@ -1,13 +1,12 @@
 # Annotate
 
 Select text in an earlier conversation message and prepare comments in Pi's editor.
-Use `/a` or `/annotate`. The extension works without Tao reminder, pipill, or diff-review.
+Use `/a` or `/annotate`.
 
 ## Load
 
 From this repository, use `pi -e ./packages/annotate` for one run or
 `pi install ./packages/annotate` for a persistent local installation.
-After npm publication: `pi install npm:@onkarbhardwaj/pi-annotate`.
 
 Requires Pi's interactive terminal UI. No configuration file or external service is needed.
 Disable any older copy before installing to avoid duplicate command registrations.
