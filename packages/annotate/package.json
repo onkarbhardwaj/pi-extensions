@@ -1,0 +1,38 @@
+{
+  "name": "@onkarbhardwaj/pi-annotate",
+  "version": "0.1.0",
+  "description": "Annotate conversation messages in Pi without switching branches or sending feedback automatically",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "pi-package"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/onkarbhardwaj/pi-extensions.git",
+    "directory": "packages/annotate"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.ts"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  }
+}
