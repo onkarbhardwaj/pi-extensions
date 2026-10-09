@@ -6,7 +6,7 @@
   "license": "MIT",
   "keywords": ["pi-package"],
   "repository": {"type": "git", "url": "git+https://github.com/onkarbhardwaj/pi-extensions.git", "directory": "packages/select-messages"},
-  "files": ["src", "README.md", "LICENSE"],
+  "files": ["src", "README.md", "LICENSE", "PI-LICENSE"],
   "pi": {"extensions": ["./src/index.ts"]},
   "scripts": {"test": "node --test tests/*.test.ts"},
   "engines": {"node": ">=22.18.0"},

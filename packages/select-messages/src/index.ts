@@ -21,8 +21,8 @@ export default function (pi: ExtensionAPI) {
         while (initialId && !visible.has(initialId)) initialId = byId.get(initialId)?.parentId ?? null;
         const tree = ctx.sessionManager.getTree();
         const result = await ctx.ui.custom<string | undefined>((tui, theme, _keys, done) =>
-          picker(tui, theme, done, tree, messages, initialId ?? undefined),
-        { overlay: true, overlayOptions: { width: '90%', maxHeight: '85%', anchor: 'center' } });
+          picker(tui, theme, done, tree, messages, initialId ?? undefined, ctx.sessionManager.getLeafId() ?? undefined),
+        { overlay: true, overlayOptions: { width: '85%', maxHeight: '85%', anchor: 'center' } });
         if (result !== undefined && ctx.sessionManager.getSessionId() === sessionId) {
           ctx.ui.setEditorText(appendDraft(ctx.ui.getEditorText(), result));
         }

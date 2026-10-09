@@ -1,5 +1,4 @@
 export type Message = { id: string; role: string; text: string; conversation: boolean };
-export type Row = { message: Message; prefix: string };
 
 export function safeText(text: string): string {
   return text.replace(/\r\n/g, '\n').replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g,
@@ -9,10 +8,9 @@ export function safeText(text: string): string {
 function contentText(content: any): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
-  return content.map(block => {
+  return content.filter(block => block.type !== 'thinking').map(block => {
     if (block.type === 'text') return block.text;
     if (block.type === 'toolCall') return `[Tool call: ${block.name}]\n${JSON.stringify(block.arguments, null, 2)}`;
-    if (block.type === 'thinking') return '[Thinking omitted]';
     return `[${block.type || 'Non-text content'} omitted]`;
   }).join('\n\n');
 }
@@ -40,29 +38,6 @@ export function messageFromEntry(entry: any): Message | undefined {
   } else return;
   if (!text) return;
   return { id: entry.id, role: safeText(role).replace(/\n/g, ' '), text: safeText(text), conversation: Boolean(conversation) };
-}
-
-// A linear conversation stays unindented; only branch points add a tree level.
-// Iterative traversal also handles long pre-compaction histories.
-export function treeRows(tree: any[], messages: Map<string, Message>, all = false, query = ''): Row[] {
-  const rows: Row[] = [];
-  const stack = tree.map((node, i) => ({ node, lanes: tree.length > 1 ? [i === tree.length - 1] : [], start: tree.length > 1 })).reverse();
-  const needle = query.toLocaleLowerCase();
-  while (stack.length) {
-    const { node, lanes, start } = stack.pop()!;
-    const message = messages.get(node.entry.id);
-    const visible = message && (all || message.conversation) && `${message.role}\n${message.text}`.toLocaleLowerCase().includes(needle);
-    if (visible) {
-      const prefix = lanes.map((last, i) => start && i === lanes.length - 1 ? (last ? '└─' : '├─') : (last ? '  ' : '│ ')).join('');
-      rows.push({ message, prefix });
-    }
-    const children = node.children ?? [];
-    for (let i = children.length - 1; i >= 0; i--) {
-      const branch = children.length > 1;
-      stack.push({ node: children[i], lanes: branch ? [...lanes, i === children.length - 1] : lanes, start: branch || (!visible && start) });
-    }
-  }
-  return rows;
 }
 
 export function selectedContext(messages: Message[], selected: Set<string>): string {
