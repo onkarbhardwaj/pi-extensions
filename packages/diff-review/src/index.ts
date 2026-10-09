@@ -2,7 +2,7 @@ import { getAgentDir, type ExtensionAPI } from '@earendil-works/pi-coding-agent'
 import { Input, Key, matchesKey, visibleWidth, truncateToWidth, wrapTextWithAnsi, sliceByColumn, rgbColor } from '@earendil-works/pi-tui';
 import { join } from 'node:path';
 import { frame } from './frame.ts';
-import { parseArgs, loadConfig, resolveTarget, snapshot, selectedExcerpt, preparedReview, safeText } from './core.ts';
+import { parseArgs, loadConfig, resolveTarget, snapshot, selectedExcerpt, preparedReview, safeText, diffMatches } from './core.ts';
 
 export default function (pi: ExtensionAPI) {
   let open = false;
@@ -23,20 +23,34 @@ export default function (pi: ExtensionAPI) {
         const result = await ctx.ui.custom<string | undefined>((tui, theme, _keys, done) => {
           renderer = tui;
           let fileIndex = 0, cursor = 0, anchor = 0, scroll = 0, maxScroll = 0;
-          let follow = true, focused = 'add', status = '';
+          let follow = true, focused = 'add', status = '', showHelp = false;
           let entering = false, editing: number | undefined, pendingSelection;
-          let regions: any[] = [];
+          let regions: any[] = [], helpScroll = 0, helpMax = 0;
           let preferredListWidth: number | undefined;
           let listMin = 16, listMax = 30, currentListWidth = 0;
           let dividerX = -1, dividerTop = 0, dividerBottom = 0, draggingDivider = false;
           let componentFocused = false;
           const input = new Input({ prompt: 'Comment: ' });
+          const search = new Input({ prompt: '' });
+          let searching = false, query = '', searchKey = '', matchIndex = 0, seekMatch = false;
+          let matches: { row: number; start: number; end: number }[] = [];
+          const matchRows = new Map<number, number[]>();
+          const beginSearch = () => { searching = true; search.focused = componentFocused; tui.requestRender(); };
+          const finishSearch = () => {
+            searching = false; search.focused = false; search.setValue(''); query = ''; matches = []; matchRows.clear();
+            matchIndex = 0; searchKey = ''; seekMatch = false; follow = false; focused = 'add'; tui.requestRender();
+          };
+          search.onSubmit = finishSearch; search.onEscape = finishSearch;
+          const nextMatch = (delta: number) => {
+            if (matches.length) { matchIndex = (matchIndex + delta + matches.length) % matches.length; seekMatch = true; follow = false; }
+            tui.requestRender();
+          };
           const chooseFile = (index: number) => {
             fileIndex = Math.max(0, Math.min(review.files.length - 1, index));
             const rows = review.files[fileIndex].rows;
             cursor = Math.max(0, rows.findIndex(r => r.newLine !== undefined || r.oldLine !== undefined));
             anchor = cursor;
-            scroll = 0; follow = true; focused = 'add'; status = ''; tui.requestRender();
+            scroll = 0; follow = true; focused = 'add'; status = ''; searchKey = ''; matchIndex = 0; seekMatch = !!query; tui.requestRender();
           };
           chooseFile(0);
           const beginComment = (index?: number) => {
@@ -54,9 +68,11 @@ export default function (pi: ExtensionAPI) {
             entering = false; input.focused = false; editing = undefined; status = 'Comment saved.'; tui.requestRender();
           };
           input.onEscape = () => { entering = false; input.focused = false; status = ''; tui.requestRender(); };
-          const actions = () => ['add', ...notes.flatMap((note, i) => note.fileIndex === fileIndex ? [`edit:${i}`, `delete:${i}`] : []), 'ready', 'cancel'];
+          const actions = () => ['search', 'add', ...notes.flatMap((note, i) => note.fileIndex === fileIndex ? [`edit:${i}`, `delete:${i}`] : []), 'ready', 'cancel', 'help'];
           const activate = (action: string) => {
-            if (action === 'add') beginComment();
+            if (action === 'help') { showHelp = !showHelp; tui.requestRender(); }
+            else if (action === 'search') beginSearch();
+            else if (action === 'add') beginComment();
             else if (action.startsWith('edit:')) beginComment(Number(action.split(':')[1]));
             else if (action.startsWith('delete:')) { notes.splice(Number(action.split(':')[1]), 1); focused = 'add'; tui.requestRender(); }
             else if (action === 'cancel') done(undefined);
@@ -66,8 +82,8 @@ export default function (pi: ExtensionAPI) {
           };
           return frame({
             get focused() { return componentFocused; },
-            set focused(value) { componentFocused = value; input.focused = value && entering; },
-            invalidate() { regions = []; input.invalidate(); },
+            set focused(value) { componentFocused = value; input.focused = value && entering; search.focused = value && searching; },
+            invalidate() { regions = []; input.invalidate(); search.invalidate(); },
             render(width) {
               const margin = width >= 8 ? 1 : 0;
               const total = Math.max(1, width - margin * 2);
@@ -77,11 +93,20 @@ export default function (pi: ExtensionAPI) {
               const rightX = margin + (listWidth ? listWidth + 2 : 0);
               const w = Math.max(1, width - rightX - margin);
               const current = review.files[fileIndex];
+              const key = JSON.stringify([fileIndex, query]);
+              if (key !== searchKey) { matches = diffMatches(current.rows, query); matchIndex = Math.min(matchIndex, Math.max(0, matches.length - 1)); searchKey = key;
+                matchRows.clear(); matches.forEach((hit, i) => { const items = matchRows.get(hit.row) ?? []; items.push(i); matchRows.set(hit.row, items); });
+              }
               const rows: any[] = [];
               current.rows.forEach((row, sourceIndex) => {
                 const prefix = `${String(row.oldLine ?? '').padStart(5)} ${String(row.newLine ?? '').padStart(5)} ${row.kind === 'add' ? '+' : row.kind === 'delete' ? '-' : ' '} `;
-                const chunks = wrapTextWithAnsi(safeText(row.text) || ' ', Math.max(1, w - visibleWidth(prefix)));
-                chunks.forEach((text, part) => rows.push({ text: (part ? ' '.repeat(visibleWidth(prefix)) : prefix) + text, sourceIndex, kind: row.kind }));
+                const raw = safeText(row.text), prefixWidth = visibleWidth(prefix);
+                const chunks = wrapTextWithAnsi(raw || ' ', Math.max(1, w - prefixWidth));
+                let from = 0;
+                chunks.forEach((text, part) => {
+                  const textOffset = Math.max(from, raw.indexOf(text, from)); from = textOffset + text.length;
+                  rows.push({ text: (part ? ' '.repeat(prefixWidth) : prefix) + text, sourceIndex, kind: row.kind, textOffset, chunk: text, prefixWidth });
+                });
               });
               rows.push({ text: '' }, { text: 'Comments on this file', bold: true });
               notes.forEach((note, i) => {
@@ -92,7 +117,22 @@ export default function (pi: ExtensionAPI) {
                 rows.push({ text: '[ Edit ]  [ Delete ]', actions: [{ x: 0, width: 8, action: `edit:${i}` }, { x: 10, width: 10, action: `delete:${i}` }] });
                 rows.push({ text: '' });
               });
-              const viewport = Math.max(1, Math.floor(tui.terminal.rows * 0.9) - 11);
+              let helpLines = entering ? ['Enter saves · Esc back'] : showHelp ? [
+                '[?] Help · ↑↓ scroll · Esc back',
+                'Tab: focus controls · Enter: comment/activate · Esc: close viewer',
+                '↑↓: line · Shift+↑↓ or Shift+click: select excerpt · ←→: switch file',
+                'Wheel: scroll · Drag divider or [ ]: resize file list',
+                '/ or click Search: search diff · ↑↓: matches · ←→: edit query · Enter/Esc: end search',
+                'Ready: append review JSON to draft, never send',
+              ].flatMap(line => wrapTextWithAnsi(line, Math.max(1, width - margin * 2))) : [width >= 65
+                ? 'Shift+↑↓ select · Enter comment · Esc close · [?] Help'
+                : '[?] Help · Esc close'];
+              if (showHelp && !entering) {
+                const limit = Math.max(1, Math.min(8, Math.floor(tui.terminal.rows * .9) - 11));
+                helpMax = Math.max(0, helpLines.length - limit); helpScroll = Math.min(helpScroll, helpMax);
+                helpLines = helpLines.slice(helpScroll, helpScroll + limit);
+              }
+              const viewport = Math.max(1, Math.floor(tui.terminal.rows * 0.9) - 9 - helpLines.length);
               maxScroll = Math.max(0, rows.length - viewport);
               if (follow) {
                 const index = focused.startsWith('edit:') || focused.startsWith('delete:')
@@ -101,16 +141,28 @@ export default function (pi: ExtensionAPI) {
                 else if (index >= scroll + viewport) scroll = index - viewport + 1;
                 follow = false;
               }
+              if (seekMatch) {
+                const hit = matches[matchIndex];
+                const index = hit ? rows.findIndex(r => r.sourceIndex === hit.row && hit.start < r.textOffset + r.chunk.length && hit.end > r.textOffset) : -1;
+                if (index >= 0) scroll = Math.max(0, index - Math.floor(viewport / 2));
+                seekMatch = false;
+              }
               scroll = Math.max(0, Math.min(scroll, maxScroll));
               const visible = rows.slice(scroll, scroll + viewport);
               const path = current.path ?? current.oldPath;
               const fileCounts = review.files.map((_, index) => notes.filter(note => note.fileIndex === index).length);
               const counter = `Comments: ${notes.length}`;
-              const titleWidth = Math.max(1, total - visibleWidth(counter) - 2);
+              const searchWidth = Math.min(Math.max(12, Math.floor(total * .45)), Math.max(1, total - 1));
+              const count = searching ? (query ? ` ↑ ${matches.length ? matchIndex + 1 : 0}/${matches.length} ↓  ↵ Done` : ' ↵ Done') : '';
+              const countWidth = Math.min(visibleWidth(count), Math.max(0, searchWidth - 9));
+              const fieldWidth = Math.max(1, searchWidth - countWidth);
+              const field = searching ? search.render(Math.max(1, fieldWidth - 8)).join('') : '';
+              const searchX = margin + total - searchWidth;
+              const titleWidth = Math.max(1, total - searchWidth);
               const title = truncateToWidth(`Review · ${review.repository} · ${review.branch} · base ${review.base}`, titleWidth);
               const header = [
-                title + ' '.repeat(Math.max(2, total - visibleWidth(title) - visibleWidth(counter))) + counter,
-                review.worktree,
+                title + ' '.repeat(Math.max(0, total - searchWidth - visibleWidth(title))),
+                `${review.worktree} · ${counter}`,
                 `${current.status} ${safeText(current.oldPath && current.path && current.oldPath !== current.path ? current.oldPath + ' → ' + current.path : path)} · file comments: ${fileCounts[fileIndex]}`,
                 '',
               ];
@@ -125,8 +177,15 @@ export default function (pi: ExtensionAPI) {
               const paint = (text, w, options = {}) => {
                 const t = truncateToWidth(text, w); return theme.style(t + ' '.repeat(Math.max(0, w - visibleWidth(t))), { fg, bg, ...options });
               };
-              regions = [];
+              regions = [{ x: searchX, y: 0, width: searchWidth, action: 'search' }];
               const display = header.map((text, i) => paint(' '.repeat(margin) + text, width, { bold: i === 0 }));
+              const searchStyle = searching ? { bg: selectedBg } : {};
+              const searchField = searching
+                ? paint('Search: ', Math.min(8, fieldWidth), { ...searchStyle, fg: theme.colors.accent, bold: true })
+                  + paint(field, Math.max(0, fieldWidth - 8), searchStyle)
+                : paint('Search: /', fieldWidth);
+              display[0] = paint(' '.repeat(margin) + header[0], searchX, { bold: true })
+                + searchField + paint(count, countWidth, searchStyle) + paint('', margin);
               const bodyHeight = Math.min(viewport, Math.max(visible.length, listWidth ? Math.min(review.files.length, viewport) : 0));
               const fileStart = Math.max(0, Math.min(fileIndex - Math.floor(bodyHeight / 2), review.files.length - bodyHeight));
               dividerX = listWidth ? margin + listWidth + 1 : -1;
@@ -149,6 +208,17 @@ export default function (pi: ExtensionAPI) {
                 const selected = row.sourceIndex !== undefined && row.sourceIndex >= Math.min(anchor, cursor) && row.sourceIndex <= Math.max(anchor, cursor);
                 const color = row.kind === 'add' ? addFg : row.kind === 'delete' ? deleteFg : fg;
                 let right = paint(row.text, w, { fg: color, bg: selected ? selectedBg : bg, bold: row.bold });
+                if (row.sourceIndex !== undefined && query) {
+                  for (const j of [...(matchRows.get(row.sourceIndex) ?? [])].reverse()) {
+                    const hit = matches[j];
+                    const start = Math.max(hit.start, row.textOffset) - row.textOffset;
+                    const end = Math.min(hit.end, row.textOffset + row.chunk.length) - row.textOffset;
+                    if (end <= start) continue;
+                    const x = row.prefixWidth + visibleWidth(row.chunk.slice(0, start)), size = visibleWidth(row.chunk.slice(start, end));
+                    right = sliceByColumn(right, 0, x) + theme.style(row.chunk.slice(start, end), { fg: color, bg: selectedBg, bold: true, underline: j === matchIndex })
+                      + sliceByColumn(right, x + size, Math.max(0, w - x - size));
+                  }
+                }
                 if (active) {
                   const x = active.x - rightX;
                   const t = truncateToWidth(row.text, w); const padded = t + ' '.repeat(Math.max(0, w - visibleWidth(t)));
@@ -172,12 +242,27 @@ export default function (pi: ExtensionAPI) {
               }
               display.push(truncateToWidth(footer, width));
               display.push(paint(' '.repeat(margin) + status, width));
-              display.push(paint(entering ? 'Enter: save · Esc: back' : '←→: file · ↑↓: line · Shift+↑↓/click: range · Tab/Enter: control', width));
-              display.push(paint('Wheel: scroll · Drag divider / [ ]: resize files · Ready prepares JSON · Esc: cancel', width));
+              for (const line of helpLines) {
+                const x = line.indexOf('[?] Help');
+                if (!entering && x >= 0) regions.push({ x: margin + x, y: display.length, width: Math.min(8, Math.max(0, width - margin - x)), action: 'help' });
+                display.push(paint(' '.repeat(margin) + line, width));
+              }
               return display;
             },
             handleInput(data) {
               if (entering) { input.handleInput(data); tui.requestRender(); return; }
+              if (searching) {
+                if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) { nextMatch(matchesKey(data, Key.down) ? 1 : -1); return; }
+                search.handleInput(data);
+                if (query !== search.getValue()) { query = search.getValue(); matchIndex = 0; seekMatch = true; follow = false; }
+                tui.requestRender(); return;
+              }
+              if (data === '?') { showHelp = !showHelp; tui.requestRender(); return; }
+              if (showHelp && (matchesKey(data, Key.up) || matchesKey(data, Key.down))) {
+                helpScroll = Math.max(0, Math.min(helpMax, helpScroll + (matchesKey(data, Key.down) ? 1 : -1))); tui.requestRender(); return;
+              }
+              if (showHelp && matchesKey(data, Key.escape)) { showHelp = false; tui.requestRender(); return; }
+              if (data === '/') { beginSearch(); return; }
               if (matchesKey(data, Key.escape)) done(undefined);
               else if (matchesKey(data, Key.left)) chooseFile(fileIndex - 1);
               else if (matchesKey(data, Key.right)) chooseFile(fileIndex + 1);
@@ -198,6 +283,7 @@ export default function (pi: ExtensionAPI) {
             },
             handleMouse(event) {
               if (entering) return { handled: true };
+              if (searching && event.type === 'click' && event.y !== 0) finishSearch();
               if (draggingDivider && (event.type === 'drag' || event.type === 'release')) {
                 preferredListWidth = Math.max(listMin, Math.min(listMax, event.x - 2));
                 if (event.type === 'release') draggingDivider = false;

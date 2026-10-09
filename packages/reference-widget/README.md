@@ -22,6 +22,8 @@ For a persistent local install, use `pi install ./packages/reference-widget`. Pi
 
 A path adds a reference without opening the reader. Relative paths resolve against the current session working directory; `~/` is supported. References are deduplicated by canonical path, so adding a symlink to the same file does not create another entry.
 
+`/refs` lists registered filenames and full paths without opening the reader or reading file contents. An empty list shows an empty-state message.
+
 With no path, `/ref` opens the reader containing all references. Click any basename in the bar to open the same reader with that file selected; `[+]` asks for a file path. Overflow entries open the full reader. Duplicate basenames have numbered labels, while full paths remain in the stored identities and exported feedback.
 
 The model can manage the same list:
@@ -55,6 +57,14 @@ Select displayed lines, then choose **Comment**. Selection refers to what you se
 The reader uses a snapshot of the reference list and file contents when opened. External reference-list changes appear on reopening; there are no filesystem watchers. Missing files remain in the list with an error and can be removed or refreshed. Each file must be a regular UTF-8 `.md` or `.markdown` file of at most 2 MiB. Very narrow terminals omit the left pane, but left/right navigation and the selected basename remain available.
 
 Inspect prepared feedback before sending: it contains the selected excerpts, comments and full file paths. Nothing is sent over the network by this extension.
+
+Press `?` or click **[?] Help** for the full viewer controls. The normal footer shows only selection, comment and close hints. Help is scrollable with up/down arrows; Esc dismisses it without closing the viewer. During comment entry, only Enter/Esc hints are shown, and `?` remains ordinary input.
+
+## Search within the viewed file
+
+Click the top-right Search field or press `/` while viewing. The focused field has a highlighted background, accent label and text cursor. Type a literal, case-insensitive query; left/right arrows edit the query and up/down arrows move through matches with wraparound. The counter and arrows appear beside the field while searching. Enter or Esc clears the query, highlights and count, returning to viewing at the current scroll position without closing the modal.
+
+Search covers rendered Markdown text, including off-screen rows, not Markdown syntax or saved comments. Matches are recalculated after resizing or refreshing. Switching files leaves search mode; a new search applies to the newly selected file. Search navigation does not change the annotation selection. While entering a comment or file path, `/`, `n` and `p` are ordinary input.
 
 ## Test
 
