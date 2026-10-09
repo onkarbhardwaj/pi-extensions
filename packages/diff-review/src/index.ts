@@ -31,12 +31,15 @@ export default function (pi: ExtensionAPI) {
           let dividerX = -1, dividerTop = 0, dividerBottom = 0, draggingDivider = false;
           let componentFocused = false;
           const input = new Input({ prompt: 'Comment: ' });
-          const search = new Input({ prompt: 'Search: ' });
+          const search = new Input({ prompt: '' });
           let searching = false, query = '', searchKey = '', matchIndex = 0, seekMatch = false;
           let matches: { row: number; start: number; end: number }[] = [];
           const matchRows = new Map<number, number[]>();
           const beginSearch = () => { searching = true; search.focused = componentFocused; tui.requestRender(); };
-          const finishSearch = () => { searching = false; search.focused = false; tui.requestRender(); };
+          const finishSearch = () => {
+            searching = false; search.focused = false; search.setValue(''); query = ''; matches = []; matchRows.clear();
+            matchIndex = 0; searchKey = ''; seekMatch = false; follow = false; focused = 'add'; tui.requestRender();
+          };
           search.onSubmit = finishSearch; search.onEscape = finishSearch;
           const nextMatch = (delta: number) => {
             if (matches.length) { matchIndex = (matchIndex + delta + matches.length) % matches.length; seekMatch = true; follow = false; }
@@ -134,15 +137,15 @@ export default function (pi: ExtensionAPI) {
               const fileCounts = review.files.map((_, index) => notes.filter(note => note.fileIndex === index).length);
               const counter = `Comments: ${notes.length}`;
               const searchWidth = Math.min(Math.max(12, Math.floor(total * .45)), Math.max(1, total - 1));
-              const count = query ? ` ${matches.length ? matchIndex + 1 : 0}/${matches.length}${entering ? '' : ' p← →n'}` : '';
+              const count = searching && query ? ` ↑ ${matches.length ? matchIndex + 1 : 0}/${matches.length} ↓` : '';
               const countWidth = Math.min(visibleWidth(count), Math.max(0, searchWidth - 9));
               const fieldWidth = Math.max(1, searchWidth - countWidth);
-              const field = searching ? search.render(fieldWidth).join('') : truncateToWidth(`Search: ${query || '/'}`, fieldWidth);
+              const field = searching ? search.render(Math.max(1, fieldWidth - 8)).join('') : '';
               const searchX = margin + total - searchWidth;
               const titleWidth = Math.max(1, total - searchWidth);
               const title = truncateToWidth(`Review · ${review.repository} · ${review.branch} · base ${review.base}`, titleWidth);
               const header = [
-                title + ' '.repeat(Math.max(0, total - searchWidth - visibleWidth(title))) + field + count,
+                title + ' '.repeat(Math.max(0, total - searchWidth - visibleWidth(title))),
                 `${review.worktree} · ${counter}`,
                 `${current.status} ${safeText(current.oldPath && current.path && current.oldPath !== current.path ? current.oldPath + ' → ' + current.path : path)} · file comments: ${fileCounts[fileIndex]}`,
                 '',
@@ -160,6 +163,13 @@ export default function (pi: ExtensionAPI) {
               };
               regions = [{ x: searchX, y: 0, width: searchWidth, action: 'search' }];
               const display = header.map((text, i) => paint(' '.repeat(margin) + text, width, { bold: i === 0 }));
+              const searchStyle = searching ? { bg: selectedBg } : {};
+              const searchField = searching
+                ? paint('Search: ', Math.min(8, fieldWidth), { ...searchStyle, fg: theme.colors.accent, bold: true })
+                  + paint(field, Math.max(0, fieldWidth - 8), searchStyle)
+                : paint('Search: /', fieldWidth);
+              display[0] = paint(' '.repeat(margin) + header[0], searchX, { bold: true })
+                + searchField + paint(count, countWidth, searchStyle) + paint('', margin);
               const bodyHeight = Math.min(viewport, Math.max(visible.length, listWidth ? Math.min(review.files.length, viewport) : 0));
               const fileStart = Math.max(0, Math.min(fileIndex - Math.floor(bodyHeight / 2), review.files.length - bodyHeight));
               dividerX = listWidth ? margin + listWidth + 1 : -1;
@@ -223,12 +233,12 @@ export default function (pi: ExtensionAPI) {
             handleInput(data) {
               if (entering) { input.handleInput(data); tui.requestRender(); return; }
               if (searching) {
+                if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) { nextMatch(matchesKey(data, Key.down) ? 1 : -1); return; }
                 search.handleInput(data);
                 if (query !== search.getValue()) { query = search.getValue(); matchIndex = 0; seekMatch = true; follow = false; }
                 tui.requestRender(); return;
               }
               if (data === '/') { beginSearch(); return; }
-              if (query && (data === 'n' || data === 'p')) { nextMatch(data === 'n' ? 1 : -1); return; }
               if (matchesKey(data, Key.escape)) done(undefined);
               else if (matchesKey(data, Key.left)) chooseFile(fileIndex - 1);
               else if (matchesKey(data, Key.right)) chooseFile(fileIndex + 1);

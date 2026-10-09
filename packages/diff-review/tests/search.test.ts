@@ -29,21 +29,25 @@ test('diff viewer searches a snapshot, highlights wrapping, and never intercepts
   const {initTheme}=await import('@earendil-works/pi-coding-agent');initTheme('dark');
   const {visibleWidth}=await import('@earendil-works/pi-tui');const {default:extension}=await import('../src/index.ts');let command;
   extension({registerCommand:(_n,c)=>command=c,on(){},events:{on(){}}});
-  const theme={appearance:'dark',style:(text,options)=>options.underline?'\x1b[4m'+text+'\x1b[0m':text};
+  const theme={appearance:'dark',colors:{accent:'accent'},style:(text,options)=>options.underline?'\x1b[4m'+text+'\x1b[0m':text};
   let draft='Existing';
   const ctx={mode:'tui',ui:{notify(){},getEditorText:()=>draft,setEditorText:v=>draft=v,custom:async factory=>new Promise(resolve=>{
     const view=factory({terminal:{rows:40},requestRender(){}},theme,{},resolve);view.focused=true;
     const lines=(width=110)=>view.render(width).map(plain);
     const click=label=>{const display=lines(),y=display.findIndex(l=>l.includes(label));assert(y>=0,label);view.handleMouse({type:'click',button:'left',x:display[y].indexOf(label)+1,y});};
-    lines();view.handleInput('/');view.handleInput('alpha');assert(lines().some(l=>l.includes('1/5')));
-    view.handleInput('\r');view.handleInput('p');assert(lines().some(l=>l.includes('5/5')));
-    view.handleInput('n');assert(lines().some(l=>l.includes('1/5')));
+    lines();view.handleInput('/');view.handleInput('alpa');view.handleInput('\x1b[D');view.handleInput('h');view.handleInput('\x1b[C');assert(lines().some(l=>l.includes('1/5')));
+    view.handleInput('\x1b[A');assert(lines().some(l=>l.includes('5/5')));
+    view.handleInput('\x1b[B');assert(lines().some(l=>l.includes('1/5')));
     assert(view.render(110).some(l=>l.includes('\x1b[4m')));
     for(const width of [110,60,30,8])assert(view.render(width).every(l=>visibleWidth(l)<=width));
+    const body=lines().slice(5,9);view.handleInput('\r');assert(!lines().some(l=>l.includes('1/5')));
+    assert.deepEqual(lines().slice(5,9),body);
     // Jumping through matches must not replace the original code-line selection.
     click('[ Add comment ]');view.handleInput('/np');view.handleInput('\r');
-    view.handleInput('\x1b[C');assert(lines().some(l=>l.includes('0/0')));
-    view.handleInput('\x1b[D');assert(lines().some(l=>l.includes('1/5')));
+    view.handleInput('\x1b[C');lines();view.handleInput('/');view.handleInput('alpha');assert(lines().some(l=>l.includes('0/0')));
+    view.handleInput('\x1b');assert(!lines().some(l=>l.includes('0/0')));
+    view.handleInput('\x1b[D');lines();view.handleInput('/');view.handleInput('alpha');assert(lines().some(l=>l.includes('1/5')));
+    view.handleInput('\x1b');
     click('[ Ready ]');
   })}};
   await command.handler('search-test',ctx);
