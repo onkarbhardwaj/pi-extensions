@@ -35,7 +35,7 @@ export default async function (pi: ExtensionAPI) {
             let styled = '', column = 0;
             for (const region of result.blocks.filter(r => r.y === y)) {
               styled += ' '.repeat(region.x - column);
-              styled += theme.style(sliceByColumn(line, region.x, region.width), { fg, bg, bold: true });
+              styled += theme.style(sliceByColumn(line, region.x, region.width), { fg, bg });
               column = region.x + region.width;
             }
             return styled;
