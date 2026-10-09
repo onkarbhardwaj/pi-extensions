@@ -103,6 +103,17 @@ export default function referenceWidget(pi: ExtensionAPI) {
       } catch (error) { notifyError(ctx, error); }
     },
   });
+  pi.registerCommand('refs', {
+    description: 'List this session’s registered reference files without opening the reader.',
+    handler: async (_args, ctx) => {
+      try {
+        refresh(ctx); const names = labels(paths);
+        ctx.ui.notify(paths.length
+          ? paths.map((path, i) => `${i + 1}. ${names[i]}\n   ${path}`).join('\n')
+          : 'No reference files registered.', 'info');
+      } catch (error) { notifyError(ctx, error); }
+    },
+  });
   pi.registerTool({
     name: 'reference_widget', label: 'Reference files',
     description: 'Manage session Markdown references: add, list, or remove. Adding updates a filename bar without opening the reader or sending file contents to the model. Paths resolve against the current working directory. Remove unregisters a reference, never deletes its file. No comments are sent automatically.',

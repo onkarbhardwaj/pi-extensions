@@ -35,6 +35,10 @@ test('diff viewer searches a snapshot, highlights wrapping, and never intercepts
     const view=factory({terminal:{rows:40},requestRender(){}},theme,{},resolve);view.focused=true;
     const lines=(width=110)=>view.render(width).map(plain);
     const click=label=>{const display=lines(),y=display.findIndex(l=>l.includes(label));assert(y>=0,label);view.handleMouse({type:'click',button:'left',x:display[y].indexOf(label)+1,y});};
+    assert(!lines().some(l=>l.includes('Wheel: scroll')));
+    view.handleInput('?');assert(lines().some(l=>l.includes('Tab: focus controls')));
+    view.handleInput('\x1b');assert(!lines().some(l=>l.includes('Tab: focus controls')));
+    click('[?] Help');assert(lines().some(l=>l.includes('Tab: focus controls')));view.handleInput('\x1b');
     lines();view.handleInput('/');view.handleInput('alpa');view.handleInput('\x1b[D');view.handleInput('h');view.handleInput('\x1b[C');assert(lines().some(l=>l.includes('1/5')));
     view.handleInput('\x1b[A');assert(lines().some(l=>l.includes('5/5')));
     view.handleInput('\x1b[B');assert(lines().some(l=>l.includes('1/5')));
@@ -43,7 +47,7 @@ test('diff viewer searches a snapshot, highlights wrapping, and never intercepts
     const body=lines().slice(5,9);view.handleInput('\r');assert(!lines().some(l=>l.includes('1/5')));
     assert.deepEqual(lines().slice(5,9),body);
     // Jumping through matches must not replace the original code-line selection.
-    click('[ Add comment ]');view.handleInput('/np');view.handleInput('\r');
+    click('[ Add comment ]');view.handleInput('/np?');view.handleInput('\r');
     view.handleInput('\x1b[C');lines();view.handleInput('/');view.handleInput('alpha');assert(lines().some(l=>l.includes('0/0')));
     view.handleInput('\x1b');assert(!lines().some(l=>l.includes('0/0')));
     view.handleInput('\x1b[D');lines();view.handleInput('/');view.handleInput('alpha');assert(lines().some(l=>l.includes('1/5')));
