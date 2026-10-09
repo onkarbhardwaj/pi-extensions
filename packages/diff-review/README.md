@@ -74,6 +74,12 @@ inspect it before sending, particularly when reviewing private code.
 
 If pipill is also loaded, its `(d)` button can open a review using the pill label.
 
+## Search within the viewed file
+
+Click the top-right Search field or press `/` while viewing. Type a literal, case-insensitive query; Enter or Esc returns to viewing without closing the modal. `n` and `p` move through occurrences with wraparound. The counter shows the current occurrence and total; navigation hints appear beside the field only when a query is present. Clear the field to remove highlights.
+
+Search covers the captured diff, including added and removed text, not line-number prefixes or saved comments. Counts remain stable when code lines wrap. Switching files retains the query and searches the newly selected file. Search navigation does not change the annotation selection. While entering a comment, `/`, `n` and `p` are ordinary input.
+
 ## Test
 
 From this package: `npm test`. From the repository root: `npm test`.

@@ -1,8 +1,9 @@
 import { getMarkdownTheme } from '@earendil-works/pi-coding-agent';
 import { Markdown, Marked, Input, Key, matchesKey, visibleWidth, truncateToWidth, sliceByColumn, wrapTextWithAnsi } from '@earendil-works/pi-tui';
 import { frame } from './frame.ts';
+import { stripVTControlCharacters } from 'node:util';
 import { diagramMarkdown } from './mermaid.ts';
-import { excerpt, feedback, labels, safeText, type Snapshot, type Note } from './core.ts';
+import { excerpt, feedback, labels, safeText, renderedMatches, type Snapshot, type Note } from './core.ts';
 
 type Options = {
   files: Snapshot[]; selected?: string;
@@ -23,13 +24,25 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
   let regions: any[] = [], divider = -1;
   let markdown: Markdown | undefined, cachedPath: string | undefined, cachedHash: string | undefined;
   const input = new Input({ prompt: '' }), parser = new Marked();
+  const search = new Input({ prompt: 'Search: ' });
+  let searching = false, query = '', searchKey = '', matchIndex = 0, seekMatch = false;
+  let matches: { row: number; start: number; end: number }[] = [];
+  const matchRows = new Map<number, number[]>();
   const redraw = () => tui.requestRender();
+  const beginSearch = () => { searching = true; search.focused = componentFocused; redraw(); };
+  const finishSearch = () => { searching = false; search.focused = false; focused = 'content'; redraw(); };
+  search.onSubmit = finishSearch; search.onEscape = finishSearch;
+  const nextMatch = (delta: number) => {
+    if (matches.length) { matchIndex = (matchIndex + delta + matches.length) % matches.length; seekMatch = true; reveal = false; }
+    redraw();
+  };
   const current = () => files[fileIndex];
   const fileNotes = () => notes.map((note, index) => ({ note, index })).filter(n => n.note.path === current()?.path);
-  const controls = () => ['files', 'content', 'comment', ...fileNotes().flatMap(n => [`edit:${n.index}`, `delete:${n.index}`]), 'add', 'refresh', 'remove', 'ready', 'cancel'];
+  const controls = () => ['files', 'content', 'search', 'comment', ...fileNotes().flatMap(n => [`edit:${n.index}`, `delete:${n.index}`]), 'add', 'refresh', 'remove', 'ready', 'cancel'];
   const choose = (index: number) => {
     fileIndex = Math.max(0, Math.min(files.length - 1, index));
     scroll = 0; cursor = 0; anchor = undefined; markdown = undefined; rows = []; status = ''; reveal = false;
+    searchKey = ''; matchIndex = 0; seekMatch = !!query;
     listScroll = Math.max(0, Math.min(listScroll, fileIndex));
     if (fileIndex >= listScroll + height) listScroll = Math.max(0, fileIndex - height + 1);
     redraw();
@@ -48,6 +61,7 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
     if (busy || closed) return;
     try {
       if (action === 'files' || action === 'content') { focused = action; redraw(); }
+      else if (action === 'search') beginSearch();
       else if (action === 'comment') comment();
       else if (action.startsWith('edit:')) comment(Number(action.split(':')[1]));
       else if (action.startsWith('delete:')) { notes.splice(Number(action.split(':')[1]), 1); focused = 'comment'; redraw(); }
@@ -88,8 +102,8 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
 
   return frame({
     get focused() { return componentFocused; },
-    set focused(value: boolean) { componentFocused = value; input.focused = value && !!entering; },
-    invalidate() { markdown?.invalidate(); input.invalidate(); regions = []; },
+    set focused(value: boolean) { componentFocused = value; input.focused = value && !!entering; search.focused = value && searching; },
+    invalidate() { markdown?.invalidate(); input.invalidate(); search.invalidate(); searchKey = ''; regions = []; },
     dispose() { closed = true; },
     render(width: number) {
       const available = Math.max(1, width - 2);
@@ -106,6 +120,11 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
         }
         rows = markdown.render(rightWidth);
       } else rows = [];
+      const key = JSON.stringify([file?.path, file?.hash, rightWidth, query]);
+      if (key !== searchKey) {
+        matches = renderedMatches(rows, query); matchIndex = Math.min(matchIndex, Math.max(0, matches.length - 1)); searchKey = key;
+        matchRows.clear(); matches.forEach((hit, i) => { const items = matchRows.get(hit.row) ?? []; items.push(i); matchRows.set(hit.row, items); });
+      }
       const content: any[] = rows.map((text, index) => ({ text, index }));
       if (!rows.length) content.push({ text: file?.error ? safeText(file.error) : file ? '(Empty Markdown file)' : 'Add a Markdown file with /ref <path> or Add file.' });
       const activeNotes = fileNotes();
@@ -128,6 +147,7 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
         if (at < scroll) scroll = Math.max(0, at); else if (at >= scroll + height) scroll = at - height + 1;
         reveal = false;
       }
+      if (seekMatch) { const hit = matches[matchIndex]; if (hit) scroll = Math.max(0, hit.row - Math.floor(height / 2)); seekMatch = false; }
       scroll = Math.max(0, Math.min(scroll, maxScroll)); listScroll = Math.max(0, Math.min(listScroll, Math.max(0, files.length - height)));
       const names = labels(files.map(f => f.path));
       const bg = theme.colors.toolPendingBg, fg = theme.colors.text, selectedBg = theme.colors.userMessageBg;
@@ -135,9 +155,16 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
         const clipped = truncateToWidth(text, Math.max(0, columns));
         return theme.style(clipped + ' '.repeat(Math.max(0, columns - visibleWidth(clipped))), { fg, bg, ...options });
       };
-      const result = [paint(` References · ${files.length} files · ${notes.length} comments`, width, { bold: true }),
+      const count = query ? ` ${matches.length ? matchIndex + 1 : 0}/${matches.length}${entering ? '' : ' p← →n'}` : '';
+      const searchWidth = Math.min(Math.max(12, Math.floor(width * .45)), Math.max(1, width - 1));
+      const searchX = Math.max(0, width - searchWidth);
+      const countWidth = Math.min(visibleWidth(count), Math.max(0, searchWidth - 9));
+      const fieldWidth = Math.max(1, searchWidth - countWidth);
+      const field = searching ? search.render(fieldWidth).join('') : truncateToWidth(`Search: ${query || '/'}`, fieldWidth);
+      const result = [paint(` References · ${files.length} files · ${notes.length} comments`, searchX, { bold: true })
+        + paint(field, fieldWidth) + paint(count, countWidth),
         paint(` ${names[fileIndex] ?? 'No reference selected'}${files.length ? `  (${fileIndex + 1}/${files.length})` : ''}`, width), paint('', width)];
-      regions = []; divider = listWidth ? listWidth + 2 : -1;
+      regions = [{ x: searchX, y: 0, width: searchWidth, action: 'search' }]; divider = listWidth ? listWidth + 2 : -1;
       const bodyHeight = Math.min(height, Math.max(1, content.length - scroll, Math.min(height, files.length - listScroll)));
       for (let y = 0; y < bodyHeight; y++) {
         let left = '';
@@ -152,6 +179,15 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
         if (row.index !== undefined) regions.push({ x: rightX, y: result.length, width: rightWidth, line: row.index });
         const selected = anchor !== undefined && row.index !== undefined && row.index >= Math.min(anchor, cursor) && row.index <= Math.max(anchor, cursor);
         let right = paint(row.text, rightWidth, { bg: selected ? selectedBg : bg, bold: row.bold });
+        if (row.index !== undefined && query) {
+          const plain = stripVTControlCharacters(row.text);
+          for (const i of [...(matchRows.get(row.index) ?? [])].reverse()) {
+            const hit = matches[i];
+            const x = visibleWidth(plain.slice(0, hit.start)), size = visibleWidth(plain.slice(hit.start, hit.end));
+            right = sliceByColumn(right, 0, x) + theme.style(plain.slice(hit.start, hit.end), { fg, bg: theme.colors.userMessageBg, bold: true, underline: i === matchIndex })
+              + sliceByColumn(right, x + size, Math.max(0, rightWidth - x - size));
+          }
+        }
         for (const a of row.actions ?? []) {
           if (a.x >= rightWidth) continue;
           regions.push({ x: rightX + a.x, y: result.length, width: Math.min(a.width, rightWidth - a.x), action: a.action });
@@ -174,13 +210,20 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
         result.push(paint(line, width));
       }
       result.push(paint(' ' + (busy ? 'Loading…' : status), width),
-        paint(' Tab: focus · ↑↓: files/text · Shift+↑↓/click: select · Enter: comment/control', width),
-        paint(' ←→: file · wheel: pane scroll · [ ]: divider · Esc: cancel', width));
+        paint(entering ? ' Enter saves · Esc back' : ' Tab: focus · ↑↓: files/text · Shift+↑↓/click: select · Enter: comment/control', width),
+        paint(entering ? '' : ' ←→: file · wheel: pane scroll · [ ]: divider · Esc: cancel', width));
       return result;
     },
     handleInput(data: string) {
       if (busy) return;
       if (entering) { input.handleInput(data); redraw(); return; }
+      if (searching) {
+        search.handleInput(data);
+        if (query !== search.getValue()) { query = search.getValue(); matchIndex = 0; seekMatch = true; }
+        redraw(); return;
+      }
+      if (data === '/') { beginSearch(); return; }
+      if (query && (data === 'n' || data === 'p')) { nextMatch(data === 'n' ? 1 : -1); return; }
       if (matchesKey(data, Key.escape)) { close(); return; }
       if (matchesKey(data, Key.tab)) { const list = controls(); focused = list[(list.indexOf(focused) + 1) % list.length]; reveal = focused.startsWith('edit:') || focused.startsWith('delete:'); redraw(); return; }
       if (matchesKey(data, Key.left) || matchesKey(data, Key.right)) { choose(fileIndex + (matchesKey(data, Key.left) ? -1 : 1)); return; }
@@ -200,6 +243,7 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
     },
     handleMouse(event: any) {
       if (busy || entering) return { handled: true };
+      if (searching && event.type === 'click' && event.y !== 0) finishSearch();
       if (dragging && (event.type === 'drag' || event.type === 'release')) {
         preferredWidth = Math.max(12, event.x - 2); if (event.type === 'release') dragging = false; redraw(); return { handled: true };
       }

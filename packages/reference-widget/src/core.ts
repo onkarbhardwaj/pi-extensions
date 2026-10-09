@@ -85,3 +85,15 @@ export function feedback(notes: Note[]): string {
     `File: ${safeText(note.name)}\nPath: ${safeText(note.path)}\nContent SHA-256: ${note.hash}\n\n${safeText(note.excerpt).split('\n').map(l => '> ' + l).join('\n')}\n\n${safeText(note.comment)}`
   ).join('\n\n') + '\n---';
 }
+
+export function renderedMatches(rows: string[], query: string): { row: number; start: number; end: number }[] {
+  if (!query) return [];
+  // Unicode case-insensitive literal matching keeps offsets in the original text.
+  const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'giu');
+  const matches: { row: number; start: number; end: number }[] = [];
+  rows.forEach((row, index) => {
+    const text = stripVTControlCharacters(row);
+    for (const match of text.matchAll(pattern)) matches.push({ row: index, start: match.index!, end: match.index! + match[0].length });
+  });
+  return matches;
+}
