@@ -3,7 +3,7 @@
 Five extensions for [Pi](https://pi.dev), each with its own commands and setup:
 
 - [Pipill](packages/pipill/README.md): keep session reminders visible and let the agent manage them.
-- [Diff-review](packages/diff-review/README.md): select code changes and prepare review comments with `/d`.
+- [Diff-review](packages/diff-review/README.md): select code changes and prepare review comments with `/d <branch-name>`.
 - [Annotate](packages/annotate/README.md): comment on earlier conversation messages with `/a` or `/annotate`.
 - [Reference widget](packages/reference-widget/README.md): keep Markdown references in a session bar and read/comment on rendered content with `/ref`; the agent uses `reference_widget`.
 
@@ -21,9 +21,11 @@ Use `pi config` to choose which extensions are enabled. Remove or disable older 
 before switching to avoid duplicate command and tool registrations.
 The individual npm packages are not yet published.
 
-Pipill has optional ticket-prefix configuration. Diff-review needs local repository
-paths and base refs. Annotate, Reference widget and Select messages need no configuration. See each extension's README
-for commands, controls, and setup.
+#### Configuring plugins
+- Pipill has optional ticket-prefix configuration to give it better context.
+- Diff-review needs local repository paths and base refs so that it can search branches to show diffs.
+- Annotate, Reference widget and Select messages need _no configuration_.
+- See each extension's README for commands, controls, and setup.
 
 You can ask Pi: “Read this extension's README, tell me what information you need,
 and help me set it up.”
