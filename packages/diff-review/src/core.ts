@@ -204,3 +204,15 @@ export function reviewJSON(snapshot, comments) {
       oldContentHashPrefix: prefixes.get(file.oldHash) ?? null, newContentHashPrefix: prefixes.get(file.newHash) ?? null, excerpt: note.selection.excerpt, comment: note.comment };
   }) }, null, 2);
 }
+
+export function diffMatches(rows: any[], query: string): { row: number; start: number; end: number }[] {
+  if (!query) return [];
+  // Unicode case-insensitive literal matching keeps offsets in the original text.
+  const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'giu');
+  const matches: { row: number; start: number; end: number }[] = [];
+  rows.forEach((row, index) => {
+    const text = safeText(row.text);
+    for (const match of text.matchAll(pattern)) matches.push({ row: index, start: match.index!, end: match.index! + match[0].length });
+  });
+  return matches;
+}

@@ -56,6 +56,12 @@ The reader uses a snapshot of the reference list and file contents when opened. 
 
 Inspect prepared feedback before sending: it contains the selected excerpts, comments and full file paths. Nothing is sent over the network by this extension.
 
+## Search within the viewed file
+
+Click the top-right Search field or press `/` while viewing. Type a literal, case-insensitive query; Enter or Esc returns to viewing without closing the modal. `n` and `p` move through occurrences with wraparound. The counter shows the current occurrence and total; navigation hints appear beside the field only when a query is present. Clear the field to remove highlights.
+
+Search covers rendered Markdown text, including off-screen rows, not Markdown syntax or saved comments. Matches are recalculated after resizing or refreshing. Switching files retains the query and searches the newly selected file. Search navigation does not change the annotation selection. While entering a comment or file path, `/`, `n` and `p` are ordinary input.
+
 ## Test
 
 Run `npm test` from the repository root or this package. Tests cover path resolution, session restoration, missing/invalid files, displayed-excerpt capture, duplicate basenames and Mermaid width behavior.
