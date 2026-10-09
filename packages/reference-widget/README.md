@@ -58,9 +58,9 @@ Inspect prepared feedback before sending: it contains the selected excerpts, com
 
 ## Search within the viewed file
 
-Click the top-right Search field or press `/` while viewing. Type a literal, case-insensitive query; Enter or Esc returns to viewing without closing the modal. `n` and `p` move through occurrences with wraparound. The counter shows the current occurrence and total; navigation hints appear beside the field only when a query is present. Clear the field to remove highlights.
+Click the top-right Search field or press `/` while viewing. The focused field has a highlighted background, accent label and text cursor. Type a literal, case-insensitive query; left/right arrows edit the query and up/down arrows move through matches with wraparound. The counter and arrows appear beside the field while searching. Enter or Esc clears the query, highlights and count, returning to viewing at the current scroll position without closing the modal.
 
-Search covers rendered Markdown text, including off-screen rows, not Markdown syntax or saved comments. Matches are recalculated after resizing or refreshing. Switching files retains the query and searches the newly selected file. Search navigation does not change the annotation selection. While entering a comment or file path, `/`, `n` and `p` are ordinary input.
+Search covers rendered Markdown text, including off-screen rows, not Markdown syntax or saved comments. Matches are recalculated after resizing or refreshing. Switching files leaves search mode; a new search applies to the newly selected file. Search navigation does not change the annotation selection. While entering a comment or file path, `/`, `n` and `p` are ordinary input.
 
 ## Test
 

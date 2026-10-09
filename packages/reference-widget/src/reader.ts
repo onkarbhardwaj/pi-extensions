@@ -24,13 +24,16 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
   let regions: any[] = [], divider = -1;
   let markdown: Markdown | undefined, cachedPath: string | undefined, cachedHash: string | undefined;
   const input = new Input({ prompt: '' }), parser = new Marked();
-  const search = new Input({ prompt: 'Search: ' });
+  const search = new Input({ prompt: '' });
   let searching = false, query = '', searchKey = '', matchIndex = 0, seekMatch = false;
   let matches: { row: number; start: number; end: number }[] = [];
   const matchRows = new Map<number, number[]>();
   const redraw = () => tui.requestRender();
   const beginSearch = () => { searching = true; search.focused = componentFocused; redraw(); };
-  const finishSearch = () => { searching = false; search.focused = false; focused = 'content'; redraw(); };
+  const finishSearch = () => {
+    searching = false; search.focused = false; search.setValue(''); query = ''; matches = []; matchRows.clear();
+    matchIndex = 0; searchKey = ''; seekMatch = false; reveal = false; focused = 'content'; redraw();
+  };
   search.onSubmit = finishSearch; search.onEscape = finishSearch;
   const nextMatch = (delta: number) => {
     if (matches.length) { matchIndex = (matchIndex + delta + matches.length) % matches.length; seekMatch = true; reveal = false; }
@@ -155,14 +158,18 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
         const clipped = truncateToWidth(text, Math.max(0, columns));
         return theme.style(clipped + ' '.repeat(Math.max(0, columns - visibleWidth(clipped))), { fg, bg, ...options });
       };
-      const count = query ? ` ${matches.length ? matchIndex + 1 : 0}/${matches.length}${entering ? '' : ' p← →n'}` : '';
+      const count = searching && query ? ` ↑ ${matches.length ? matchIndex + 1 : 0}/${matches.length} ↓` : '';
       const searchWidth = Math.min(Math.max(12, Math.floor(width * .45)), Math.max(1, width - 1));
       const searchX = Math.max(0, width - searchWidth);
       const countWidth = Math.min(visibleWidth(count), Math.max(0, searchWidth - 9));
       const fieldWidth = Math.max(1, searchWidth - countWidth);
-      const field = searching ? search.render(fieldWidth).join('') : truncateToWidth(`Search: ${query || '/'}`, fieldWidth);
+      const searchStyle = searching ? { bg: selectedBg } : {};
+      const field = searching
+        ? paint('Search: ', Math.min(8, fieldWidth), { ...searchStyle, fg: theme.colors.accent, bold: true })
+          + paint(search.render(Math.max(1, fieldWidth - 8)).join(''), Math.max(0, fieldWidth - 8), searchStyle)
+        : paint('Search: /', fieldWidth);
       const result = [paint(` References · ${files.length} files · ${notes.length} comments`, searchX, { bold: true })
-        + paint(field, fieldWidth) + paint(count, countWidth),
+        + field + paint(count, countWidth, searchStyle),
         paint(` ${names[fileIndex] ?? 'No reference selected'}${files.length ? `  (${fileIndex + 1}/${files.length})` : ''}`, width), paint('', width)];
       regions = [{ x: searchX, y: 0, width: searchWidth, action: 'search' }]; divider = listWidth ? listWidth + 2 : -1;
       const bodyHeight = Math.min(height, Math.max(1, content.length - scroll, Math.min(height, files.length - listScroll)));
@@ -218,12 +225,12 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
       if (busy) return;
       if (entering) { input.handleInput(data); redraw(); return; }
       if (searching) {
+        if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) { nextMatch(matchesKey(data, Key.down) ? 1 : -1); return; }
         search.handleInput(data);
         if (query !== search.getValue()) { query = search.getValue(); matchIndex = 0; seekMatch = true; }
         redraw(); return;
       }
       if (data === '/') { beginSearch(); return; }
-      if (query && (data === 'n' || data === 'p')) { nextMatch(data === 'n' ? 1 : -1); return; }
       if (matchesKey(data, Key.escape)) { close(); return; }
       if (matchesKey(data, Key.tab)) { const list = controls(); focused = list[(list.indexOf(focused) + 1) % list.length]; reveal = focused.startsWith('edit:') || focused.startsWith('delete:'); redraw(); return; }
       if (matchesKey(data, Key.left) || matchesKey(data, Key.right)) { choose(fileIndex + (matchesKey(data, Key.left) ? -1 : 1)); return; }
