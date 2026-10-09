@@ -88,8 +88,8 @@ export function layout(pills, width, visibleWidth, truncate, diffAvailable = fal
   let line = '', x = 0, y = 0;
   const append = (text, targets) => {
     const size = visibleWidth(text);
-    if (x && x + 2 + size > width) { lines.push(line); line = ''; x = 0; y++; }
-    if (x) { line += '  '; x += 2; }
+    if (x && x + 1 + size > width) { lines.push(line); line = ''; x = 0; y++; }
+    if (x) { line += ' '; x += 1; }
     blocks.push({ x, y, width: size });
     for (const target of targets) if (target.width > 0) regions.push({ ...target, x: x + target.x, y });
     line += text; x += size;
@@ -97,19 +97,19 @@ export function layout(pills, width, visibleWidth, truncate, diffAvailable = fal
   const launcher = truncate('[+]', width);
   append(launcher, [{ action: 'panel', x: 0, width: visibleWidth(launcher) }]);
   for (const pill of pills) {
-    if (width < (diffAvailable ? 12 : 9)) {
-      const text = truncate(`[ ${pill.label} ]`, width);
+    if (width < (diffAvailable ? 10 : 7)) {
+      const text = truncate(`[${pill.label}]`, width);
       append(text, [{ action: 'inspect', label: pill.label, x: 0, width: visibleWidth(text) }]);
       continue;
     }
-    const label = truncate(pill.label, width - (diffAvailable ? 11 : 8));
-    const text = `[ ${label} (+)${diffAvailable ? '(d)' : ''} ]`;
-    const plus = visibleWidth(`[ ${label} `);
+    const label = truncate(pill.label, width - (diffAvailable ? 9 : 6));
+    const text = `[${label} (+)${diffAvailable ? '(d)' : ''}]`;
+    const plus = visibleWidth(`[${label} `);
     append(text, [
       { action: 'inspect', label: pill.label, x: 0, width: plus },
       { action: 'panel', x: plus, width: 3 },
       ...(diffAvailable ? [{ action: 'diff', label: pill.label, x: plus + 3, width: 3 }] : []),
-      { action: 'panel', x: plus + (diffAvailable ? 6 : 3), width: 2 },
+      { action: 'panel', x: plus + (diffAvailable ? 6 : 3), width: 1 },
     ]);
   }
   if (line) lines.push(line);
