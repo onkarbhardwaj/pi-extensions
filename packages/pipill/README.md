@@ -31,8 +31,16 @@ project-key prefix; this setting does not interpret bare `#123` references.
 For other topics discussed over 2–3 user turns, the extension asks the agent to offer a
 pill and wait for agreement. It also asks the agent to add pills when requested, remove
 only by exact label and request, and avoid duplicates. These are model instructions,
-not deterministic detection of discussions. Current labels are included as hidden
-context before each prompt.
+not deterministic detection of discussions. Guidance and current labels share one hidden
+reminder. Before each user prompt, the extension checks for its most recent reminder
+within six model-visible user/assistant text messages, stopping at the actual compaction
+entry. If that reminder has the same content, it adds nothing. Otherwise it appends a
+fresh reminder, including when labels or configured guidance changed. Tool results,
+tool-call-only assistant messages and other reminders do not advance the interval.
+Past reminders stay untouched; a summary mentioning them does not count. The check
+uses active-branch chronology and Pi's resolved projection, so omitted reminders and
+retained pre-compaction reminders cannot suppress a fresh one. Label changes made
+through the UI reach model context at the next user prompt; they never trigger a turn.
 
 Ask Pi: “Read pipill's README and config example. Ask me which ticket prefixes I use,
 then help create my configuration.” Reload Pi with `/reload` after changing config.
