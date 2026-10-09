@@ -5,8 +5,10 @@ Five extensions for [Pi](https://pi.dev), each with its own commands and setup:
 - [Pipill](packages/pipill/README.md): keep session reminders visible and let the agent manage them.
 - [Diff-review](packages/diff-review/README.md): select code changes and prepare review comments with `/d <branch-name>`.
 - [Annotate](packages/annotate/README.md): comment on earlier conversation messages with `/a` or `/annotate`.
-- [Reference widget](packages/reference-widget/README.md): keep Markdown references in a session bar and read/comment on rendered content with `/ref`; the agent uses `reference_widget`.
-
+- [Reference widget](packages/reference-widget/README.md):
+  - Keep Markdown references in a session bar and read/comment on rendered content with `/ref`
+  - Renders mermaid diagrams as well.
+  - The agent uses `reference_widget`, so you can tell pi to add any document in references with path conversationally.
 - [Select messages](packages/select-messages/README.md): select conversation messages with `/sel` and append role-labelled quotes to the editor draft.
 
 ## Install
