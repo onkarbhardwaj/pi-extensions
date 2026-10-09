@@ -82,7 +82,7 @@ export function excerpt(lines: string[], anchor: number | undefined, cursor: num
 export function feedback(notes: Note[]): string {
   if (!notes.length) throw new Error('Add at least one comment before Ready.');
   return '---\nComments on reference files (quoted excerpts are rendered text, not source line coordinates):\n\n' + notes.map(note =>
-    `File: ${safeText(note.name)}\nPath: ${safeText(note.path)}\nContent SHA-256: ${note.hash}\n\n${safeText(note.excerpt).split('\n').map(l => '> ' + l).join('\n')}\n\n${safeText(note.comment)}`
+    `File: ${safeText(note.name)}\nPath: ${safeText(note.path)}\n\n${safeText(note.excerpt).split('\n').map(l => '> ' + l).join('\n')}\n\n${safeText(note.comment)}`
   ).join('\n\n') + '\n---';
 }
 

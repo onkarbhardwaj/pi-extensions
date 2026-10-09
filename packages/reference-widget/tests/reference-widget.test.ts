@@ -55,6 +55,8 @@ test('comments capture displayed text without ANSI and survive later layout chan
   lines.splice(0,lines.length,'Entirely different wrapping');
   const result=feedback([note]);assert.match(result,/> Heading\n> A rendered line/);assert.doesNotMatch(result,/\x1b|Entirely different/);
   assert.match(result,/rendered text, not source line coordinates/);
+  assert.doesNotMatch(result,/SHA-256|\bhash\b/);
+  assert.match(result,/Path: \/notes\.md/);
   assert.throws(()=>excerpt([],undefined,0),/Select/);assert.throws(()=>feedback([]),/comment/);
   assert.equal(safeText('\x1b[31m'), '\\x1b[31m');
 });
