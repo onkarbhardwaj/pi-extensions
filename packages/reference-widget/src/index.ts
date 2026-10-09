@@ -2,6 +2,7 @@ import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-a
 import { visibleWidth, truncateToWidth } from '@earendil-works/pi-tui';
 import { Type } from 'typebox';
 import { realpath } from 'node:fs/promises';
+import { stripVTControlCharacters } from 'node:util';
 import { STATE_TYPE, addPath, commandPath, labels, readSnapshot, resolvePath, restore } from './core.ts';
 import { reader } from './reader.ts';
 
@@ -18,7 +19,8 @@ export default function referenceWidget(pi: ExtensionAPI) {
         invalidate() { regions = []; },
         render(width: number) {
           if (width < 1) return [];
-          regions = []; let line = truncateToWidth('[+]', width);
+          const accent = (text: string) => theme.fg('accent', stripVTControlCharacters(text));
+          regions = []; let line = accent(truncateToWidth('[+]', width));
           regions.push({ x: 0, width: visibleWidth(line), add: true });
           const names = labels(paths);
           for (let i = 0; i < paths.length; i++) {
@@ -26,13 +28,13 @@ export default function referenceWidget(pi: ExtensionAPI) {
             const available = width - visibleWidth(line) - reserve - 1;
             if (available < 7) {
               const tail = truncateToWidth(` [+${paths.length - i}]`, Math.max(0, width - visibleWidth(line)));
-              regions.push({ x: visibleWidth(line), width: visibleWidth(tail) });line += tail;break;
+              regions.push({ x: visibleWidth(line), width: visibleWidth(tail) });line += accent(tail);break;
             }
             const label = truncateToWidth(names[i], Math.min(26, available - 4));
             const pill = ` [${label}]`;
-            regions.push({ x: visibleWidth(line), width: visibleWidth(pill), path: paths[i] });line += pill;
+            regions.push({ x: visibleWidth(line), width: visibleWidth(pill), path: paths[i] });line += accent(pill);
           }
-          return [theme.fg('accent', line)];
+          return [line];
         },
         handleMouse(event: any) {
           if (event.type !== 'click' || event.button !== 'left' || event.y !== 0) return;
