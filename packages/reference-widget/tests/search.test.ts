@@ -27,6 +27,11 @@ test('reader search navigates without modifying selection and leaves comment typ
     {files,add:async()=>files[0],remove:async()=>{},refresh:async()=>files[0]});view.focused=true;
   const lines=(width=100)=>view.render(width).map(plain);
   const click=label=>{const display=lines(),y=display.findIndex(l=>l.includes(label));assert(y>=0,label);view.handleMouse({type:'click',button:'left',x:display[y].indexOf(label)+1,y});};
+  assert(!lines().some(l=>l.includes('wheel: pane')));
+  view.handleInput('?');assert(lines().some(l=>l.includes('Tab: focus controls')));
+  view.handleInput('\x1b');assert(!closed);assert(!lines().some(l=>l.includes('Tab: focus controls')));
+  click('[?] Help');assert(lines().some(l=>l.includes('Tab: focus controls')));
+  view.handleInput('\x1b');
   click('Alpha first');
   view.handleInput('/');view.handleInput('alpa');view.handleInput('\x1b[D');view.handleInput('h');view.handleInput('\x1b[C');assert(lines().some(l=>l.includes('1/3')));
   view.handleInput('\x1b[B');assert(lines().some(l=>l.includes('2/3')));
@@ -35,7 +40,7 @@ test('reader search navigates without modifying selection and leaves comment typ
   assert(view.render(100).some(l=>l.includes('\x1b[4m')));
   const before=lines().slice(4,7);view.handleInput('\r');assert(!lines().some(l=>l.includes('3/3')));
   assert.deepEqual(lines().slice(4,7),before);assert(!view.render(100).some(l=>l.includes('\x1b[4m')));
-  click('[Comment]');view.handleInput('/np');view.handleInput('\r');
+  click('[Comment]');view.handleInput('/np?');view.handleInput('\r');
   click('[Ready]');assert(result.includes('> Alpha first'));assert(result.includes('/np'));assert(closed);
   // Separate interaction covers file switches, missing matches, resize and Esc.
   closed=false;const second=reader({terminal:{rows:40},requestRender(){}},theme,()=>closed=true,{files,add:async()=>files[0],remove:async()=>{},refresh:async()=>files[0]});

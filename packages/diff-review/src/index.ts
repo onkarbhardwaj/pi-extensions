@@ -23,9 +23,9 @@ export default function (pi: ExtensionAPI) {
         const result = await ctx.ui.custom<string | undefined>((tui, theme, _keys, done) => {
           renderer = tui;
           let fileIndex = 0, cursor = 0, anchor = 0, scroll = 0, maxScroll = 0;
-          let follow = true, focused = 'add', status = '';
+          let follow = true, focused = 'add', status = '', showHelp = false;
           let entering = false, editing: number | undefined, pendingSelection;
-          let regions: any[] = [];
+          let regions: any[] = [], helpScroll = 0, helpMax = 0;
           let preferredListWidth: number | undefined;
           let listMin = 16, listMax = 30, currentListWidth = 0;
           let dividerX = -1, dividerTop = 0, dividerBottom = 0, draggingDivider = false;
@@ -68,9 +68,10 @@ export default function (pi: ExtensionAPI) {
             entering = false; input.focused = false; editing = undefined; status = 'Comment saved.'; tui.requestRender();
           };
           input.onEscape = () => { entering = false; input.focused = false; status = ''; tui.requestRender(); };
-          const actions = () => ['search', 'add', ...notes.flatMap((note, i) => note.fileIndex === fileIndex ? [`edit:${i}`, `delete:${i}`] : []), 'ready', 'cancel'];
+          const actions = () => ['search', 'add', ...notes.flatMap((note, i) => note.fileIndex === fileIndex ? [`edit:${i}`, `delete:${i}`] : []), 'ready', 'cancel', 'help'];
           const activate = (action: string) => {
-            if (action === 'search') beginSearch();
+            if (action === 'help') { showHelp = !showHelp; tui.requestRender(); }
+            else if (action === 'search') beginSearch();
             else if (action === 'add') beginComment();
             else if (action.startsWith('edit:')) beginComment(Number(action.split(':')[1]));
             else if (action.startsWith('delete:')) { notes.splice(Number(action.split(':')[1]), 1); focused = 'add'; tui.requestRender(); }
@@ -116,7 +117,22 @@ export default function (pi: ExtensionAPI) {
                 rows.push({ text: '[ Edit ]  [ Delete ]', actions: [{ x: 0, width: 8, action: `edit:${i}` }, { x: 10, width: 10, action: `delete:${i}` }] });
                 rows.push({ text: '' });
               });
-              const viewport = Math.max(1, Math.floor(tui.terminal.rows * 0.9) - 11);
+              let helpLines = entering ? ['Enter saves · Esc back'] : showHelp ? [
+                '[?] Help · ↑↓ scroll · Esc back',
+                'Tab: focus controls · Enter: comment/activate · Esc: close viewer',
+                '↑↓: line · Shift+↑↓ or Shift+click: select excerpt · ←→: switch file',
+                'Wheel: scroll · Drag divider or [ ]: resize file list',
+                '/ or click Search: search diff · ↑↓: matches · ←→: edit query · Enter/Esc: end search',
+                'Ready: append review JSON to draft, never send',
+              ].flatMap(line => wrapTextWithAnsi(line, Math.max(1, width - margin * 2))) : [width >= 65
+                ? 'Shift+↑↓ select · Enter comment · Esc close · [?] Help'
+                : '[?] Help · Esc close'];
+              if (showHelp && !entering) {
+                const limit = Math.max(1, Math.min(8, Math.floor(tui.terminal.rows * .9) - 11));
+                helpMax = Math.max(0, helpLines.length - limit); helpScroll = Math.min(helpScroll, helpMax);
+                helpLines = helpLines.slice(helpScroll, helpScroll + limit);
+              }
+              const viewport = Math.max(1, Math.floor(tui.terminal.rows * 0.9) - 9 - helpLines.length);
               maxScroll = Math.max(0, rows.length - viewport);
               if (follow) {
                 const index = focused.startsWith('edit:') || focused.startsWith('delete:')
@@ -137,7 +153,7 @@ export default function (pi: ExtensionAPI) {
               const fileCounts = review.files.map((_, index) => notes.filter(note => note.fileIndex === index).length);
               const counter = `Comments: ${notes.length}`;
               const searchWidth = Math.min(Math.max(12, Math.floor(total * .45)), Math.max(1, total - 1));
-              const count = searching && query ? ` ↑ ${matches.length ? matchIndex + 1 : 0}/${matches.length} ↓` : '';
+              const count = searching ? (query ? ` ↑ ${matches.length ? matchIndex + 1 : 0}/${matches.length} ↓  ↵ Done` : ' ↵ Done') : '';
               const countWidth = Math.min(visibleWidth(count), Math.max(0, searchWidth - 9));
               const fieldWidth = Math.max(1, searchWidth - countWidth);
               const field = searching ? search.render(Math.max(1, fieldWidth - 8)).join('') : '';
@@ -226,8 +242,11 @@ export default function (pi: ExtensionAPI) {
               }
               display.push(truncateToWidth(footer, width));
               display.push(paint(' '.repeat(margin) + status, width));
-              display.push(paint(entering ? 'Enter: save · Esc: back' : '←→: file · ↑↓: line · Shift+↑↓/click: range · Tab/Enter: control', width));
-              display.push(paint(entering ? '' : 'Wheel: scroll · Drag divider / [ ]: resize files · Ready prepares JSON · Esc: cancel', width));
+              for (const line of helpLines) {
+                const x = line.indexOf('[?] Help');
+                if (!entering && x >= 0) regions.push({ x: margin + x, y: display.length, width: Math.min(8, Math.max(0, width - margin - x)), action: 'help' });
+                display.push(paint(' '.repeat(margin) + line, width));
+              }
               return display;
             },
             handleInput(data) {
@@ -238,6 +257,11 @@ export default function (pi: ExtensionAPI) {
                 if (query !== search.getValue()) { query = search.getValue(); matchIndex = 0; seekMatch = true; follow = false; }
                 tui.requestRender(); return;
               }
+              if (data === '?') { showHelp = !showHelp; tui.requestRender(); return; }
+              if (showHelp && (matchesKey(data, Key.up) || matchesKey(data, Key.down))) {
+                helpScroll = Math.max(0, Math.min(helpMax, helpScroll + (matchesKey(data, Key.down) ? 1 : -1))); tui.requestRender(); return;
+              }
+              if (showHelp && matchesKey(data, Key.escape)) { showHelp = false; tui.requestRender(); return; }
               if (data === '/') { beginSearch(); return; }
               if (matchesKey(data, Key.escape)) done(undefined);
               else if (matchesKey(data, Key.left)) chooseFile(fileIndex - 1);

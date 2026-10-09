@@ -20,8 +20,8 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
   let listWidth = 0, preferredWidth: number | undefined;
   let focused = 'files', componentFocused = false, entering: 'comment' | 'path' | undefined;
   let editing: number | undefined, pending: Omit<Note, 'comment'> | undefined;
-  let status = '', busy = false, closed = false, reveal = false, dragging = false;
-  let regions: any[] = [], divider = -1;
+  let status = '', busy = false, closed = false, reveal = false, dragging = false, showHelp = false;
+  let regions: any[] = [], divider = -1, helpScroll = 0, helpMax = 0;
   let markdown: Markdown | undefined, cachedPath: string | undefined, cachedHash: string | undefined;
   const input = new Input({ prompt: '' }), parser = new Marked();
   const search = new Input({ prompt: '' });
@@ -41,7 +41,7 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
   };
   const current = () => files[fileIndex];
   const fileNotes = () => notes.map((note, index) => ({ note, index })).filter(n => n.note.path === current()?.path);
-  const controls = () => ['files', 'content', 'search', 'comment', ...fileNotes().flatMap(n => [`edit:${n.index}`, `delete:${n.index}`]), 'add', 'refresh', 'remove', 'ready', 'cancel'];
+  const controls = () => ['files', 'content', 'search', 'comment', ...fileNotes().flatMap(n => [`edit:${n.index}`, `delete:${n.index}`]), 'add', 'refresh', 'remove', 'ready', 'cancel', 'help'];
   const choose = (index: number) => {
     fileIndex = Math.max(0, Math.min(files.length - 1, index));
     scroll = 0; cursor = 0; anchor = undefined; markdown = undefined; rows = []; status = ''; reveal = false;
@@ -64,6 +64,7 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
     if (busy || closed) return;
     try {
       if (action === 'files' || action === 'content') { focused = action; redraw(); }
+      else if (action === 'help') { showHelp = !showHelp; redraw(); }
       else if (action === 'search') beginSearch();
       else if (action === 'comment') comment();
       else if (action.startsWith('edit:')) comment(Number(action.split(':')[1]));
@@ -142,7 +143,22 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
         if (footerColumn > 1 && footerColumn + text.length + 1 > width) { footerRows++; footerColumn = 1; }
         footerColumn += Math.min(text.length, Math.max(0, width - footerColumn)) + 1;
       }
-      height = Math.max(1, Math.floor(tui.terminal.rows * .9) - 9 - footerRows);
+      let helpLines = entering ? ['Enter saves · Esc back'] : showHelp ? [
+        '[?] Help · ↑↓ scroll · Esc back',
+        'Tab: focus controls · Enter: comment/activate · Esc: close viewer',
+        '↑↓: files/text · Shift+↑↓ or Shift+click: select excerpt',
+        '←→: switch file · Wheel: scroll pane · Drag divider or [ ]: resize',
+        '/ or click Search: search file · ↑↓: matches · ←→: edit query · Enter/Esc: end search',
+        'Ready: append comments to draft, never send · Remove: unregister, never delete file',
+      ].flatMap(line => wrapTextWithAnsi(line, Math.max(1, width - 2))) : [width >= 65
+        ? 'Shift+↑↓ select · Enter comment · Esc close · [?] Help'
+        : '[?] Help · Esc close'];
+      if (showHelp && !entering) {
+        const limit = Math.max(1, Math.min(8, Math.floor(tui.terminal.rows * .9) - 9 - footerRows));
+        helpMax = Math.max(0, helpLines.length - limit); helpScroll = Math.min(helpScroll, helpMax);
+        helpLines = helpLines.slice(helpScroll, helpScroll + limit);
+      }
+      height = Math.max(1, Math.floor(tui.terminal.rows * .9) - 7 - footerRows - helpLines.length);
       maxScroll = Math.max(0, content.length - height);
       cursor = Math.max(0, Math.min(cursor, rows.length - 1));
       if (reveal) {
@@ -158,7 +174,7 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
         const clipped = truncateToWidth(text, Math.max(0, columns));
         return theme.style(clipped + ' '.repeat(Math.max(0, columns - visibleWidth(clipped))), { fg, bg, ...options });
       };
-      const count = searching && query ? ` ↑ ${matches.length ? matchIndex + 1 : 0}/${matches.length} ↓` : '';
+      const count = searching ? (query ? ` ↑ ${matches.length ? matchIndex + 1 : 0}/${matches.length} ↓  ↵ Done` : ' ↵ Done') : '';
       const searchWidth = Math.min(Math.max(12, Math.floor(width * .45)), Math.max(1, width - 1));
       const searchX = Math.max(0, width - searchWidth);
       const countWidth = Math.min(visibleWidth(count), Math.max(0, searchWidth - 9));
@@ -216,9 +232,12 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
         }
         result.push(paint(line, width));
       }
-      result.push(paint(' ' + (busy ? 'Loading…' : status), width),
-        paint(entering ? ' Enter saves · Esc back' : ' Tab: focus · ↑↓: files/text · Shift+↑↓/click: select · Enter: comment/control', width),
-        paint(entering ? '' : ' ←→: file · wheel: pane scroll · [ ]: divider · Esc: cancel', width));
+      result.push(paint(' ' + (busy ? 'Loading…' : status), width));
+      for (const line of helpLines) {
+        const x = line.indexOf('[?] Help');
+        if (!entering && x >= 0) regions.push({ x: x + 1, y: result.length, width: Math.min(8, Math.max(0, width - x - 1)), action: 'help' });
+        result.push(paint(' ' + line, width));
+      }
       return result;
     },
     handleInput(data: string) {
@@ -230,6 +249,11 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
         if (query !== search.getValue()) { query = search.getValue(); matchIndex = 0; seekMatch = true; }
         redraw(); return;
       }
+      if (data === '?') { showHelp = !showHelp; redraw(); return; }
+      if (showHelp && (matchesKey(data, Key.up) || matchesKey(data, Key.down))) {
+        helpScroll = Math.max(0, Math.min(helpMax, helpScroll + (matchesKey(data, Key.down) ? 1 : -1))); redraw(); return;
+      }
+      if (showHelp && matchesKey(data, Key.escape)) { showHelp = false; redraw(); return; }
       if (data === '/') { beginSearch(); return; }
       if (matchesKey(data, Key.escape)) { close(); return; }
       if (matchesKey(data, Key.tab)) { const list = controls(); focused = list[(list.indexOf(focused) + 1) % list.length]; reveal = focused.startsWith('edit:') || focused.startsWith('delete:'); redraw(); return; }
