@@ -2,6 +2,7 @@ import { getAgentDir, type ExtensionAPI, type ExtensionContext } from '@earendil
 import { join } from 'node:path';
 import { loadConfig } from './config.ts';
 import { reminderContext, toolDescription } from './guidance.ts';
+import { hasRecentReminder } from './reminder.ts';
 import { Key, matchesKey, visibleWidth, truncateToWidth, wrapTextWithAnsi, sliceByColumn, rgbColor } from '@earendil-works/pi-tui';
 import { Type } from 'typebox';
 import { frame } from './frame.ts';
@@ -192,13 +193,11 @@ export default async function (pi: ExtensionAPI) {
       request.labels = restore(sessionContext.sessionManager.getEntries()).map(pill => pill.label);
     } catch { request.error = 'Saved pill state could not be read.'; }
   });
-  pi.on('before_agent_start', (_event, ctx) => ({
-    message: {
-      customType: 'pipill-reminder',
-      content: reminderContext(restore(ctx.sessionManager.getEntries()), ticketPrefixes),
-      display: false,
-    },
-  }));
+  pi.on('before_agent_start', (_event, ctx) => {
+    const content = reminderContext(restore(ctx.sessionManager.getEntries()), ticketPrefixes);
+    if (hasRecentReminder(ctx.sessionManager.getBranch(), ctx.sessionManager.buildSessionProjection().entries, 'pipill-reminder', content)) return;
+    return { message: { customType: 'pipill-reminder', content, display: false } };
+  });
   pi.on('session_tree', (_event, ctx) => refresh(ctx));
   pi.registerTool({
     name: 'pipill',
