@@ -13,7 +13,9 @@
     "extensions": [
       "./packages/pipill/src/index.ts",
       "./packages/diff-review/src/index.ts",
-      "./packages/annotate/src/index.ts"
+      "./packages/annotate/src/index.ts",
+      "./packages/reference-widget/src/index.ts",
+      "./packages/select-messages/src/index.ts"
     ]
   }
 }
