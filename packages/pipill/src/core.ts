@@ -94,7 +94,7 @@ export function layout(pills, width, visibleWidth, truncate, diffAvailable = fal
     for (const target of targets) if (target.width > 0) regions.push({ ...target, x: x + target.x, y });
     line += text; x += size;
   };
-  const launcher = truncate('[ + ]', width);
+  const launcher = truncate('[+]', width);
   append(launcher, [{ action: 'panel', x: 0, width: visibleWidth(launcher) }]);
   for (const pill of pills) {
     if (width < (diffAvailable ? 12 : 9)) {
