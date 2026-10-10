@@ -17,6 +17,7 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify('Capturing diff…', 'info');
         const target = await resolveTarget(config, command.pattern);
         const review = await snapshot(target, command.base);
+        if (review.baseResolutionNote) ctx.ui.notify(review.baseResolutionNote, 'warning');
         if (!review.files.length) { ctx.ui.notify('No changes against the merge base.', 'info'); return; }
         let renderer;
         const notes: any[] = [];

@@ -1,5 +1,18 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+const exec = promisify(execFile);
+
+export async function githubPRs(target: any) {
+  const result = await exec('gh', ['pr', 'list', '--state', 'open', '--head', target.branch,
+    '--limit', '100', '--json', 'number,baseRefName,headRefName,isCrossRepository'],
+    { cwd: target.path, timeout: 15000, maxBuffer: 1024 * 1024 });
+  const prs = JSON.parse(result.stdout);
+  if (!Array.isArray(prs)) throw new Error('Invalid GitHub PR response.');
+  return prs.filter(pr => pr.headRefName === target.branch && pr.isCrossRepository === false);
+}
+
 
 async function catalog(path: string): Promise<any | undefined> {
   try { return JSON.parse(await readFile(path, 'utf8')); }
@@ -31,7 +44,7 @@ export function parentFromCatalog(data: any, branch: string): { base: string; ba
     baseSource: index === 0 ? 'stack-trunk' : 'stack-parent' };
 }
 
-export async function resolveReviewBase(target: any, override: string | undefined, git: Function) {
+export async function resolveReviewBase(target: any, override: string | undefined, git: Function, lookupPRs = githubPRs) {
   if (override !== undefined) return { base: override, baseSource: 'explicit' };
   const commonDir = (await git(target.path, ['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim();
   // Legacy per-worktree catalogs need gh-stack's explicit migration, never an
@@ -45,7 +58,25 @@ export async function resolveReviewBase(target: any, override: string | undefine
   }
   const data = await catalog(join(commonDir, 'gh-stack'));
   const parent = data === undefined ? undefined : parentFromCatalog(data, target.branch);
-  const result = parent ?? { base: target.repository.defaultBase, baseSource: 'configured-default' };
+  let result: any = parent;
+  if (!result) {
+    let prs;
+    try { prs = await lookupPRs(target); }
+    catch {
+      return { base: target.repository.defaultBase, baseSource: 'configured-default',
+        baseResolutionNote: 'GitHub PR lookup failed; using configured default.' };
+    }
+    if (prs.length > 1) throw new Error(`Multiple open PRs match branch ${target.branch}; specify --base.`);
+    if (prs.length === 1) {
+      const pr = prs[0];
+      if (typeof pr.baseRefName !== 'string' || !pr.baseRefName || pr.baseRefName.startsWith('-') || !Number.isInteger(pr.number))
+        throw new Error('Invalid GitHub PR base metadata.');
+      const ref = `refs/remotes/origin/${pr.baseRefName}`;
+      try { await git(target.path, ['show-ref', '--verify', ref]); }
+      catch { throw new Error(`PR base origin/${pr.baseRefName} is missing locally. Fetch it or specify --base explicitly.`); }
+      result = { base: `origin/${pr.baseRefName}`, baseSource: 'github-pr', basePR: pr.number };
+    } else result = { base: target.repository.defaultBase, baseSource: 'configured-default' };
+  }
   if (typeof result.base !== 'string' || !result.base || result.base.startsWith('-')) throw new Error('Invalid review base in stack metadata.');
   if (result.baseSource.startsWith('stack-')) {
     try { await git(target.path, ['show-ref', '--verify', `refs/heads/${result.base}`]); }
