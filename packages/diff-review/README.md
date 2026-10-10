@@ -56,6 +56,14 @@ base refs, and optional ticket prefixes to use, then help create my configuratio
 A match must identify exactly one checked-out branch. Ambiguous matches are reported
 rather than picking an arbitrary worktree.
 
+### Stacked branches
+
+Base selection uses this order: explicit `--base`, immediate lower branch in a locally tracked gh-stack stack (or trunk for its bottom layer), then the repository's configured default. The header and output `baseSource` identify `explicit`, `stack-parent`, `stack-trunk`, or `configured-default`.
+
+The extension reads gh-stack v0.2.0's schema-1 catalog from the common Git directory, including when the target is a linked worktree. It does not run `gh stack view --json`, because that command can refresh PR metadata, save state, and migrate legacy catalogs. No gh-stack installation or network access is required to read an existing catalog. Malformed, unsupported, ambiguous, legacy worktree catalogs, or missing local parent refs produce errors; `--base` bypasses stack lookup. Remote-only linked stacks without local tracking use the configured default.
+
+Only the lower branch's committed history is used, not its working files. Merge-base comparison isolates the upper layer even if the parent advanced before a rebase. The catalog format is version-specific; future schema changes require an adapter update rather than silent guessing.
+
 The snapshot compares the merge base with the working tree, including staged,
 unstaged, and untracked non-ignored files. It requires resolved merge conflicts.
 Binary, oversized, non-UTF-8, and unsupported Git entries are shown without selectable

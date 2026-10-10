@@ -159,7 +159,7 @@ export default function (pi: ExtensionAPI) {
               const field = searching ? search.render(Math.max(1, fieldWidth - 8)).join('') : '';
               const searchX = margin + total - searchWidth;
               const titleWidth = Math.max(1, total - searchWidth);
-              const title = truncateToWidth(`Review · ${review.repository} · ${review.branch} · base ${review.base}`, titleWidth);
+              const title = truncateToWidth(`Review · ${review.repository} · ${review.branch} · base ${review.base} (${review.baseSource})`, titleWidth);
               const header = [
                 title + ' '.repeat(Math.max(0, total - searchWidth - visibleWidth(title))),
                 `${review.worktree} · ${counter}`,
