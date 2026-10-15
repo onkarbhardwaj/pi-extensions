@@ -1,5 +1,5 @@
 {
-  "name": "@onkarbhardwaj/pi-scheduled",
+  "name": "@onkarbhardwaj/pi-busywork",
   "version": "0.1.0",
   "description": "Idle-aware reminders and heartbeats for Pi",
   "type": "module",
@@ -10,7 +10,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/onkarbhardwaj/pi-extensions.git",
-    "directory": "packages/scheduled"
+    "directory": "packages/busywork"
   },
   "files": [
     "src",
