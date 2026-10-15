@@ -1,7 +1,7 @@
 {
-  "name": "@onkarbhardwaj/pi-reminders",
+  "name": "@onkarbhardwaj/pi-scheduled",
   "version": "0.1.0",
-  "description": "Idle-aware session reminders for Pi",
+  "description": "Idle-aware reminders and heartbeats for Pi",
   "type": "module",
   "license": "MIT",
   "keywords": [
@@ -10,7 +10,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/onkarbhardwaj/pi-extensions.git",
-    "directory": "packages/reminders"
+    "directory": "packages/scheduled"
   },
   "files": [
     "src",

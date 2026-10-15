@@ -3,7 +3,7 @@
 Six extensions for [Pi](https://pi.dev), each with its own commands and setup:
 
 - [Pipill](packages/pipill/README.md): keep session reminders visible and let the agent manage them.
-- [Reminders](packages/reminders/README.md): schedule idle-aware session reminders with `/remind` and manage them with `/reminders`, with one-click dismiss or 15-minute snooze.
+- [Scheduled](packages/scheduled/README.md): idle-aware reminders and heartbeats in one clickable indicator and panel.
 - [Diff-review](packages/diff-review/README.md): select code changes and prepare review comments with `/d <branch-name>`.
 - [Annotate](packages/annotate/README.md): comment on earlier conversation messages with `/a` or `/annotate`.
 - [Reference widget](packages/reference-widget/README.md):
@@ -27,7 +27,7 @@ The individual npm packages are not yet published.
 #### Configuring plugins
 - Pipill has optional ticket-prefix configuration to give it better context.
 - Diff-review needs local repository paths and base refs so that it can search branches to show diffs.
-- Annotate, Reminders, Reference widget and Select messages need _no configuration_.
+- Annotate, Scheduled, Reference widget and Select messages need _no configuration_.
 - See each extension's README for commands, controls, and setup.
 
 You can ask Pi: “Read this extension's README, tell me what information you need,
@@ -47,7 +47,7 @@ Try one extension without installing it:
 
 ```sh
 pi -e ./packages/pipill
-pi -e ./packages/reminders
+pi -e ./packages/scheduled
 pi -e ./packages/diff-review
 pi -e ./packages/annotate
 pi -e ./packages/reference-widget
