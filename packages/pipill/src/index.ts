@@ -175,24 +175,16 @@ export default async function (pi: ExtensionAPI) {
             const w = Math.max(1, width);
             const margin = w >= 8 ? 2 : 0;
             const contentWidth = Math.max(1, w - margin * 2);
-            const rows: { text: string; bold?: boolean; remove?: string; removeX?: number }[] = [];
+            type Row = { text: string; bold?: boolean; muted?: boolean; buttons?: [string, string | undefined][] };
+            const rows: Row[] = [];
+            const buttons = (items: [string, string | undefined][]): Row => ({ text: items.map(([label]) => label).join(' · '), buttons: items });
             const starts = new Map<string, number>();
             let section: string | undefined;
             for (const pill of ordered()) {
-              const heading = ticketOf(pill) ? 'Tickets' : 'Pills';
-              if (heading !== section) {
-                rows.push({ text: heading, bold: true });
-                section = heading;
-              }
+              const heading = ticketOf(pill) ? 'Tickets' : 'Topics';
+              if (heading !== section) { rows.push({ text: heading, bold: true }); section = heading; }
               starts.set(pill.label, rows.length);
-              if (contentWidth >= 14) {
-                const shortLabel = truncateToWidth(pill.label, contentWidth - 12);
-                const removeX = visibleWidth(shortLabel) + 2;
-                rows.push({ text: shortLabel + '  [ Remove ]', bold: true, remove: pill.label, removeX });
-              } else {
-                rows.push(...wrapTextWithAnsi(pill.label, contentWidth).map(text => ({ text, bold: true })));
-                rows.push({ text: '[ Remove ]', remove: pill.label, removeX: 0 });
-              }
+              rows.push(...wrapTextWithAnsi(pill.label, contentWidth).map(text => ({ text, bold: true })));
               if (pill.title) rows.push(...wrapTextWithAnsi(pill.title, contentWidth).map(text => ({ text })));
               if (pill.description) rows.push(...wrapTextWithAnsi(pill.description, contentWidth).map(text => ({ text })));
               const ticket = ticketOf(pill);
@@ -205,41 +197,48 @@ export default async function (pi: ExtensionAPI) {
                   : ['No PR matched.'];
                 for (const line of prLines) rows.push(...wrapTextWithAnsi(line, contentWidth).map(text => ({ text })));
               }
-              rows.push({ text: '' });
+              rows.push(buttons([['Remove', pill.label]]), { text: '' });
             }
-            if (!pills.length) rows.push({ text: 'No pills remaining.' });
-            const available = Math.max(1, Math.floor(tui.terminal.rows * 0.8) - 8);
+            if (!pills.length) rows.push({ text: 'No pills remaining.', muted: true }, { text: '' });
+            const available = Math.max(1, Math.floor(tui.terminal.rows * 0.8) - 6);
             maxScroll = Math.max(0, rows.length - available);
             if (initialTarget !== undefined) {
               scroll = starts.get(initialTarget) ?? 0;
               initialTarget = undefined;
             }
             if (revealFocus && focused !== undefined) {
-              const index = rows.findIndex(r => r.remove === focused);
-              if (index < scroll) scroll = index;
+              const index = rows.findIndex(r => r.buttons?.some(([, target]) => target === focused));
+              if (index >= 0 && index < scroll) scroll = index;
               else if (index >= scroll + available) scroll = index - available + 1;
             }
             revealFocus = false;
             scroll = Math.max(0, Math.min(scroll, maxScroll));
             const visible = rows.slice(scroll, scroll + available);
-            const display = [{ text: '' }, ...visible,
-              { text: '' }, { text: '[ Close ]' + (hasTickets() ? (refreshing ? '  Refreshing…' : '  [ Refresh ]') : '') },
-              { text: '↑↓/wheel: scroll · Tab: choose · Enter: select · Esc: close' }];
-            regions = visible.flatMap((row, index) => row.remove === undefined ? [] : [{ label: row.remove,
-              x: margin + (row.removeX ?? 0), y: index + 1,
-              width: Math.min(10, contentWidth - (row.removeX ?? 0)) }]);
-            regions.push({ x: margin, y: display.length - 2, width: Math.min(contentWidth, 9) });
-            if (hasTickets() && !refreshing && contentWidth >= 22) regions.push({ label: REFRESH, x: margin + 11, y: display.length - 2, width: 11 });
-            const bg = theme.colors.toolPendingBg, fg = theme.colors.text;
-            const selectedBg = theme.colors.userMessageBg, selectedFg = theme.colors.text;
+            const footer: [string, string | undefined][] = [['Close', undefined]];
+            if (hasTickets()) footer.push([refreshing ? 'Refreshing…' : 'Refresh', refreshing ? '\u0000busy' : REFRESH]);
+            const display: Row[] = [{ text: '' }, ...visible, buttons(footer),
+              { text: 'Tab: choose · Enter: select · ↑↓/wheel: scroll · Esc: close', muted: true }];
+            regions = [];
+            display.forEach((row, y) => {
+              let x = margin;
+              for (const [label, target] of row.buttons ?? []) {
+                if (target !== '\u0000busy') regions.push({ label: target, x, y, width: Math.min(visibleWidth(label), Math.max(0, margin + contentWidth - x)) });
+                x += visibleWidth(label) + 3;
+              }
+            });
+            const bg = theme.colors.toolPendingBg, fg = theme.colors.text, selectedBg = theme.colors.userMessageBg;
             return display.map((row, y) => {
               const text = ' '.repeat(margin) + truncateToWidth(row.text, contentWidth);
               const padded = text + ' '.repeat(Math.max(0, w - visibleWidth(text)));
-              const selected = regions.find(r => r.y === y && r.label === focused);
-              if (selected) return theme.style(sliceByColumn(padded, 0, selected.x), { fg, bg, bold: row.bold })
-                + theme.style(sliceByColumn(padded, selected.x, selected.width), { fg: selectedFg, bg: selectedBg, bold: true })
-                + theme.style(sliceByColumn(padded, selected.x + selected.width, w - selected.x - selected.width), { fg, bg });
-              return theme.style(padded, { fg, bg, bold: row.bold });
+              if (!row.buttons) return theme.style(padded, { fg: row.muted ? 'muted' : fg, bg, bold: row.bold });
+              let out = '', at = 0;
+              for (const region of regions.filter(r => r.y === y && r.width > 0)) {
+                out += theme.style(sliceByColumn(padded, at, region.x - at), { fg: 'muted', bg });
+                out += theme.style(sliceByColumn(padded, region.x, region.width), region.label === focused
+                  ? { fg, bg: selectedBg, bold: true } : { fg: 'muted', bg });
+                at = region.x + region.width;
+              }
+              return out + theme.style(sliceByColumn(padded, at, Math.max(0, w - at)), { fg: 'muted', bg });
             });
           },
           handleInput(data) {
