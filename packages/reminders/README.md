@@ -13,7 +13,7 @@ Session reminders for Pi. Reminders do not call a model or wake the agent. When 
 
 Times can be durations (`30m`, `2h`, `1d`), a local clock time (`15:30`), or a future ISO date. A clock time that has already passed today schedules for tomorrow.
 
-`/reminders` opens a list where reminders can be dismissed, deleted, or snoozed for 10 minutes or 1 hour. The agent tool supports `list`, `add`, and `remove`; it should change reminders only when the user asks.
+`/reminders` opens one panel with direct **Dismiss** and **Snooze 15m** buttons for every reminder. Use the mouse in fullscreen mode, or Tab and Enter from the keyboard. The agent tool supports `list`, `add`, and `remove`; it should change reminders only when the user asks.
 
 ## Behavior
 

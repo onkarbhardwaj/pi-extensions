@@ -3,7 +3,7 @@
 Six extensions for [Pi](https://pi.dev), each with its own commands and setup:
 
 - [Pipill](packages/pipill/README.md): keep session reminders visible and let the agent manage them.
-- [Reminders](packages/reminders/README.md): schedule idle-aware session reminders with `/remind` and manage them with `/reminders`.
+- [Reminders](packages/reminders/README.md): schedule idle-aware session reminders with `/remind` and manage them with `/reminders`, with one-click dismiss or 15-minute snooze.
 - [Diff-review](packages/diff-review/README.md): select code changes and prepare review comments with `/d <branch-name>`.
 - [Annotate](packages/annotate/README.md): comment on earlier conversation messages with `/a` or `/annotate`.
 - [Reference widget](packages/reference-widget/README.md):
