@@ -107,7 +107,8 @@ export default function (pi: ExtensionAPI) {
     if (!context.isIdle() || context.hasPendingMessages()) { heartbeatTimer = setTimeout(beat, 5000); return; }
     runningHeartbeat = due.id;
     saveHeartbeats(heartbeats.map(item => item.id === due.id ? markRun(item) : item));
-    void pi.sendUserMessage(`[Heartbeat: ${due.name}]\n${due.prompt}`).catch(error => {
+    // sendUserMessage may return void; normalize both sync throws and async rejections.
+    void Promise.resolve().then(() => pi.sendUserMessage(`[Heartbeat: ${due.name}]\n${due.prompt}`)).catch(error => {
       runningHeartbeat = undefined;
       context?.ui.notify(`Heartbeat ${due.name} failed: ${error instanceof Error ? error.message : String(error)}`, 'error');
       scheduleHeartbeat();
