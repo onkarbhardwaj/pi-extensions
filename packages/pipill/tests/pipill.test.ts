@@ -11,13 +11,13 @@ test('missing configuration uses neutral defaults; personal prefixes normalize o
   const dir = await mkdtemp(join(tmpdir(), 'pipill-test-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const path = join(dir, 'pipill.json');
-  assert.deepEqual(await loadConfig(path), { ticketPrefixes: [], ci: {} });
+  assert.deepEqual(await loadConfig(path), { ticketPrefixes: [], repos: [], ci: {} });
   await writeFile(path, JSON.stringify({ ticketPrefixes: ['proj', 'OPS', 'PROJ'], ci: { 'Org/Repo': { ignore: ['Kodiak'] } } }));
-  assert.deepEqual(await loadConfig(path), { ticketPrefixes: ['PROJ', 'OPS'], ci: { 'org/repo': { ignore: ['Kodiak'] } } });
+  assert.deepEqual(await loadConfig(path), { ticketPrefixes: ['PROJ', 'OPS'], repos: [], ci: { 'org/repo': { ignore: ['Kodiak'] } } });
 });
 
 test('invalid configuration is reported instead of replacing the user policy', async t => {
-  for (const value of [null, [], { ticketPrefixes: 'PROJ' }, { ticketPrefixes: ['PROJ-'] }, { ticketPrefixes: [12] }, { ci: { repo: {} } }, { ci: { 'o/r': { ignore: [''] } } }]) {
+  for (const value of [null, [], { ticketPrefixes: 'PROJ' }, { ticketPrefixes: ['PROJ-'] }, { ticketPrefixes: [12] }, { ci: { repo: {} } }, { repos: ['repo'] }, { ci: { 'o/r': { ignore: [''] } } }]) {
     assert.throws(() => parseConfig(value));
   }
   const dir = await mkdtemp(join(tmpdir(), 'pipill-invalid-'));

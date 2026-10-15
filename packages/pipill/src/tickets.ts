@@ -6,6 +6,7 @@ export type TicketPr = {
   number: number; title: string; url: string; branch: string; state: string; isDraft: boolean;
   ci?: CiState; review?: ReviewState; reviewDecision?: string; mergeable?: string;
   failedChecks?: { name: string; url?: string }[];
+  repo?: string;
 };
 export type TicketStatus = { prs: TicketPr[]; ci?: CiState; review?: ReviewState; error?: string; checkedAt: number };
 
@@ -104,8 +105,12 @@ export async function currentRepo(cwd: string) {
   return (await run('gh', ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'], cwd)).trim().toLowerCase();
 }
 
-export async function fetchTicketPrs(ticket: string, cwd: string, ignore: string[] = []): Promise<TicketPr[]> {
-  return matchPrs(ticket, JSON.parse(await run('gh', ['pr', 'list', '--state', 'all', '--limit', '20', '--search', ticket, '--json', FIELDS], cwd)), ignore);
+/** CI settings are keyed by owner/repo, whichever GitHub host the repository lives on. */
+export const repoKey = (repo: string) => repo.toLowerCase().split('/').slice(-2).join('/');
+
+export async function fetchTicketPrs(ticket: string, cwd: string, repo: string, ignore: string[] = []): Promise<TicketPr[]> {
+  const raw = JSON.parse(await run('gh', ['pr', 'list', '--repo', repo, '--state', 'all', '--limit', '20', '--search', ticket, '--json', FIELDS], cwd));
+  return matchPrs(ticket, raw, ignore).map(pr => ({ ...pr, repo: repoKey(repo) }));
 }
 
 export function currentBranch(cwd: string): Promise<string | undefined> {
