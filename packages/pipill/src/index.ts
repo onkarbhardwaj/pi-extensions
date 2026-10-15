@@ -22,6 +22,7 @@ export default async function (pi: ExtensionAPI) {
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
   let polling = false;
   const ticketOf = (pill: Pill) => ticketIds(pill.label, ticketPrefixes)[0];
+  const ordered = () => [...pills.filter(pill => !ticketOf(pill)), ...pills.filter(pill => ticketOf(pill))];
   const POLL_MS = 5 * 60_000;
 
   async function pollTickets(ctx: ExtensionContext) {
@@ -83,7 +84,7 @@ export default async function (pi: ExtensionAPI) {
       return {
         invalidate() { regions = []; },
         render(width: number) {
-          const result = layout(pills, width, visibleWidth, (s: string, w: number) => truncateToWidth(s, w),
+          const result = layout(ordered(), width, visibleWidth, (s: string, w: number) => truncateToWidth(s, w),
             (pill: Pill) => { const ticket = ticketOf(pill); return ticket ? icons(statuses.get(ticket)) : undefined; });
           regions = result.regions;
           const dark = theme.appearance !== 'light';
@@ -163,7 +164,7 @@ export default async function (pi: ExtensionAPI) {
           tui.requestRender();
         };
         const moveFocus = () => {
-          const choices = [undefined, ...(hasTickets() ? [REFRESH] : []), ...pills.map(p => p.label)];
+          const choices = [undefined, ...(hasTickets() ? [REFRESH] : []), ...ordered().map(p => p.label)];
           focused = choices[(choices.indexOf(focused) + 1) % choices.length];
           revealFocus = true;
           tui.requestRender();
@@ -176,7 +177,13 @@ export default async function (pi: ExtensionAPI) {
             const contentWidth = Math.max(1, w - margin * 2);
             const rows: { text: string; bold?: boolean; remove?: string; removeX?: number }[] = [];
             const starts = new Map<string, number>();
-            for (const pill of pills) {
+            let section: string | undefined;
+            for (const pill of ordered()) {
+              const heading = ticketOf(pill) ? 'Tickets' : 'Pills';
+              if (heading !== section) {
+                rows.push({ text: heading, bold: true });
+                section = heading;
+              }
               starts.set(pill.label, rows.length);
               if (contentWidth >= 14) {
                 const shortLabel = truncateToWidth(pill.label, contentWidth - 12);
@@ -215,11 +222,11 @@ export default async function (pi: ExtensionAPI) {
             revealFocus = false;
             scroll = Math.max(0, Math.min(scroll, maxScroll));
             const visible = rows.slice(scroll, scroll + available);
-            const display = [{ text: '' }, { text: 'Active', bold: true }, { text: '' }, ...visible,
+            const display = [{ text: '' }, ...visible,
               { text: '' }, { text: '[ Close ]' + (hasTickets() ? (refreshing ? '  Refreshing…' : '  [ Refresh ]') : '') },
               { text: '↑↓/wheel: scroll · Tab: choose · Enter: select · Esc: close' }];
             regions = visible.flatMap((row, index) => row.remove === undefined ? [] : [{ label: row.remove,
-              x: margin + (row.removeX ?? 0), y: index + 3,
+              x: margin + (row.removeX ?? 0), y: index + 1,
               width: Math.min(10, contentWidth - (row.removeX ?? 0)) }]);
             regions.push({ x: margin, y: display.length - 2, width: Math.min(contentWidth, 9) });
             if (hasTickets() && !refreshing && contentWidth >= 22) regions.push({ label: REFRESH, x: margin + 11, y: display.length - 2, width: 11 });
