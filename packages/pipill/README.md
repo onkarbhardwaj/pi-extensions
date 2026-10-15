@@ -80,7 +80,7 @@ to two icons and a diff button:
 - Review: ❗ changes requested or merge conflict, 👍 approved, 🔀 merged.
 - 🔍 opens diff review for the matched PR's branch, or says that no PR matched.
 
-The panel shows topic pills under **Pills** and ticket pills under **Tickets**; the bar uses the same order. It lists each matched PR with its state and failing checks. **Refresh** checks
+The panel shows topic pills under **Topics** and ticket pills under **Tickets**; the bar uses the same order. It lists each matched PR with its state and failing checks. **Refresh** checks
 again immediately. Notifications appear
 when CI starts failing, a review needs attention, or a PR merges.
 

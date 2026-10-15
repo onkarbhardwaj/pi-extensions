@@ -24,7 +24,7 @@ A heartbeat sends its instruction to the agent on an interval. It starts a turn 
 
 ## Panel
 
-The reminders indicator stays visible and shows `⏰ No reminders` when empty. Click the reminders indicator or run `/reminders` to manage reminders. Click the heartbeats indicator or run `/heartbeats` to manage heartbeats. Reminders have **Dismiss** and **Snooze**. Heartbeats have **Pause** or **Resume**, and **Stop**. Click a heartbeat name to show its instruction and latest result.
+The indicators stay visible when empty: `⏰ No reminders` and `♥ No heartbeats`. Click the reminders indicator or run `/reminders` to manage reminders. Click the heartbeats indicator or run `/heartbeats` to manage heartbeats. Reminders have **Dismiss** and **Snooze**. Heartbeats have **Pause** or **Resume**, and **Stop**. Click a heartbeat name to show its instruction and latest result.
 
 The agent tools `reminder` and `heartbeat` support the same management actions. They should change schedules only when the user asks.
 
