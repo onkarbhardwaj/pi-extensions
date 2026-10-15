@@ -5,6 +5,7 @@ import { join, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { structuredPatch } from 'diff';
+import { resolveReviewBase } from './stack-base.ts';
 
 const run = promisify(execFile);
 const MAX_BYTES = 1024 * 1024;
@@ -134,7 +135,7 @@ export function diffRows(oldText, newText, oldPath, path) {
   return rows;
 }
 export async function snapshot(target, baseOverride) {
-  const base = baseOverride ?? target.repository.defaultBase;
+  const { base, baseSource, basePR, baseResolutionNote } = await resolveReviewBase(target, baseOverride, git);
   const baseCommit = (await git(target.path, ['rev-parse', '--verify', `${base}^{commit}`])).trim();
   const headCommit = (await git(target.path, ['rev-parse', 'HEAD'])).trim();
   const common = (await git(target.path, ['merge-base', '--all', baseCommit, headCommit])).trim().split('\n');
@@ -161,7 +162,7 @@ export async function snapshot(target, baseOverride) {
   const commitPrefixes = Object.fromEntries(await Promise.all([...new Set([baseCommit, mergeBaseCommit, headCommit])].map(async sha =>
     [sha, (await git(target.path, ['rev-parse', '--short=7', sha])).trim()])));
   return { version: 1, repository: target.repository.name, worktree: target.path, branch: target.branch,
-    base, baseCommit, mergeBaseCommit, headCommit, commitPrefixes, capturedAt: new Date().toISOString(), files };
+    base, baseSource, basePR, baseResolutionNote, baseCommit, mergeBaseCommit, headCommit, commitPrefixes, capturedAt: new Date().toISOString(), files };
 }
 export function selectedExcerpt(file, anchor, cursor) {
   const startRow = Math.min(anchor, cursor), endRow = Math.max(anchor, cursor);
