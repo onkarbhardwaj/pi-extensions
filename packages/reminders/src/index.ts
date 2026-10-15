@@ -1,7 +1,8 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { randomUUID } from 'node:crypto';
 import { Type } from 'typebox';
-import { Key, matchesKey, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
+import { Key, matchesKey, sliceByColumn, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
+import { frame } from './frame.ts';
 import { STATE_TYPE, type Reminder, describe, markDue, markMissed, nextDue, parseRemind, parseWhen, restore, statusText, validateText } from './core.ts';
 
 export default function (pi: ExtensionAPI) {
@@ -26,7 +27,7 @@ export default function (pi: ExtensionAPI) {
     const ctx = context;
     ctx.ui.setWidget('pi-reminders', (_tui, theme) => ({
       invalidate() {},
-      render(width: number) { return [truncateToWidth(theme.fg('accent', `[ ${label} ]`), width)]; },
+      render(width: number) { return [truncateToWidth(theme.fg('accent', label), width)]; },
       handleMouse(event: any) {
         if (event.type !== 'click' || event.button !== 'left') return;
         void manage(ctx).catch(error => ctx.ui.notify(String(error), 'error'));
@@ -111,28 +112,43 @@ export default function (pi: ExtensionAPI) {
           selected = Math.min(selected, actions().length - 1);
           if (!reminders.length) done(); else tui.requestRender();
         };
-        return {
+        return frame({
           invalidate() { regions = []; },
           render(width) {
-            const lines: string[] = [theme.bold('Reminders'), ''];
+            const bg = theme.colors.toolPendingBg, fg = theme.colors.text, selectedBg = theme.colors.userMessageBg;
+            const paint = (text: string, columns = width, options: any = {}) => {
+              const clipped = truncateToWidth(text, Math.max(0, columns));
+              return theme.style(clipped + ' '.repeat(Math.max(0, columns - visibleWidth(clipped))), { fg, bg, ...options });
+            };
+            const lines: string[] = [paint('Reminders', width, { bold: true }), paint('')];
             regions = [];
             let index = 0;
-            for (const reminder of reminders) {
-              lines.push(truncateToWidth(describe(reminder), width));
-              const y = lines.length;
-              const buttons = [['[ Dismiss ]', 'dismiss'], ['[ Snooze 15m ]', 'snooze']];
-              let x = 0, row = '';
-              for (const [label, action] of buttons) {
-                const text = index === selected ? theme.fg('accent', label) : label;
-                regions.push({ x, y, width: visibleWidth(label), id: reminder.id, action, index });
-                row += text + '  '; x += visibleWidth(label) + 2; index++;
+            const buttonRow = (buttons: [string, string, string][]) => {
+              let x = 0, plain = '';
+              const spans: { x: number; width: number; selected: boolean }[] = [];
+              for (const [label, action, id] of buttons) {
+                const size = visibleWidth(label);
+                regions.push({ x, y: lines.length, width: size, id, action, index });
+                spans.push({ x, width: size, selected: index === selected });
+                plain += label + '  '; x += size + 2; index++;
               }
-              lines.push(row, '');
+              const padded = truncateToWidth(plain, width) + ' '.repeat(Math.max(0, width - visibleWidth(truncateToWidth(plain, width))));
+              let row = '', at = 0;
+              for (const span of spans.filter(s => s.x < width)) {
+                row += theme.style(sliceByColumn(padded, at, span.x - at), { fg, bg });
+                row += theme.style(sliceByColumn(padded, span.x, Math.min(span.width, width - span.x)), { fg, bg: span.selected ? selectedBg : bg, bold: span.selected });
+                at = span.x + span.width;
+              }
+              lines.push(row + theme.style(sliceByColumn(padded, at, Math.max(0, width - at)), { fg, bg }));
+            };
+            for (const reminder of reminders) {
+              lines.push(paint(describe(reminder)));
+              buttonRow([['Dismiss', 'dismiss', reminder.id], ['Snooze 15m', 'snooze', reminder.id]]);
+              lines.push(paint(''));
             }
-            const close = '[ Close ]';
-            regions.push({ x: 0, y: lines.length, width: visibleWidth(close), id: '', action: 'close', index });
-            lines.push(index === selected ? theme.fg('accent', close) : close, 'Tab/arrows: choose · Enter: select · Esc: close');
-            return lines.map(line => truncateToWidth(line, width));
+            buttonRow([['Close', 'close', '']]);
+            lines.push(paint('Tab/arrows: choose · Enter: select · Esc: close', width, { fg: 'muted' }));
+            return lines;
           },
           handleInput(data) {
             const count = actions().length;
@@ -147,7 +163,7 @@ export default function (pi: ExtensionAPI) {
             if (!hit) return;
             selected = hit.index; run(hit); return { handled: true };
           },
-        };
+        }, theme);
       }, { overlay: true, overlayOptions: { width: '70%', maxHeight: '80%', anchor: 'center' } });
     } finally { panelOpen = false; }
   }
