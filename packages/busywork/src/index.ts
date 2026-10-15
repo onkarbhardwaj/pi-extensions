@@ -5,8 +5,14 @@ import { Key, matchesKey, sliceByColumn, truncateToWidth, visibleWidth } from '@
 import { frame } from './frame.ts';
 import { HEARTBEAT_STATE_TYPE, type Heartbeat, dueHeartbeat, expire, heartbeatStatusText, heartbeatSummary, markRun, nextHeartbeat, parseHeartbeat, parseInterval, restoreHeartbeats, validateName, validatePrompt } from './heartbeats.ts';
 import { STATE_TYPE, type Reminder, describe, markDue, markMissed, nextDue, parseRemind, parseWhen, restore, statusText, validateText } from './core.ts';
+import { getAgentDir } from '@earendil-works/pi-coding-agent';
+import { join } from 'node:path';
+import { DEFAULT_COMMAND, MEETINGS_STATE_TYPE, commandExists, loadBusyworkConfig, pruneDismissed, restoreDismissed, runMeetings, syncMeetings } from './meetings.ts';
 
-export default function (pi: ExtensionAPI) {
+export default async function (pi: ExtensionAPI) {
+  const { meetings: meetingsConfig } = await loadBusyworkConfig(join(getAgentDir(), 'busywork.json'));
+  let meetingTimer: ReturnType<typeof setTimeout> | undefined;
+  let dismissedMeetings: string[] = [];
   let reminders: Reminder[] = [];
   let context: ExtensionContext | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -178,10 +184,33 @@ export default function (pi: ExtensionAPI) {
 
   function remove(id: string) {
     if (stateError) throw new Error(stateError);
-    const next = reminders.filter(reminder => reminder.id !== id);
-    if (next.length === reminders.length) throw new Error('Reminder not found.');
+    const target = reminders.find(reminder => reminder.id === id);
+    if (!target) throw new Error('Reminder not found.');
+    // Remember dismissed meetings so the next sync does not add them back.
+    if (target.source) {
+      dismissedMeetings = pruneDismissed([...dismissedMeetings, target.source]);
+      pi.appendEntry(MEETINGS_STATE_TYPE, { version: 1, dismissed: dismissedMeetings });
+    }
     notifiedDue.delete(id);
-    save(next);
+    save(reminders.filter(reminder => reminder.id !== id));
+  }
+
+  async function syncMeetingReminders(ctx: ExtensionContext) {
+    if (meetingTimer) clearTimeout(meetingTimer);
+    meetingTimer = undefined;
+    if (!meetingsConfig.enabled || context !== ctx) return;
+    const command = meetingsConfig.command ?? DEFAULT_COMMAND;
+    try {
+      // An uncompiled default helper means meeting sync is not set up; stay quiet about it.
+      if (!meetingsConfig.command && !(await commandExists(command))) return;
+      const meetings = await runMeetings(command);
+      if (context !== ctx || stateError) return;
+      const result = syncMeetings(reminders, meetings, dismissedMeetings, meetingsConfig, randomUUID);
+      if (result.changed) save(result.reminders);
+    } catch (error) {
+      if (context === ctx) ctx.ui.notify(`Meeting sync failed: ${error instanceof Error ? error.message : String(error)}`, 'warning');
+    }
+    if (context === ctx) meetingTimer = setTimeout(() => void syncMeetingReminders(ctx), meetingsConfig.intervalMinutes * 60_000);
   }
 
   async function manage(ctx: ExtensionContext, section: 'reminders' | 'heartbeats') {
@@ -286,7 +315,12 @@ export default function (pi: ExtensionAPI) {
     } finally { panelOpen = false; }
   }
 
-  pi.on('session_start', (_event, ctx) => { notifiedDue = new Set(); load(ctx, true); });
+  pi.on('session_start', (_event, ctx) => {
+    notifiedDue = new Set();
+    load(ctx, true);
+    dismissedMeetings = pruneDismissed(restoreDismissed(ctx.sessionManager.getEntries()));
+    if (ctx.mode === 'tui') void syncMeetingReminders(ctx);
+  });
   pi.on('session_tree', (_event, ctx) => load(ctx));
   pi.on('agent_end', event => {
     if (!runningHeartbeat) return;
@@ -298,7 +332,7 @@ export default function (pi: ExtensionAPI) {
     if (heartbeats.some(beat => beat.id === id)) saveHeartbeats(heartbeats.map(beat => beat.id === id ? { ...beat, lastResult } : beat));
   });
   pi.on('agent_settled', () => { schedule(); scheduleHeartbeat(); });
-  pi.on('session_shutdown', () => { clearTimer(); if (heartbeatTimer) clearTimeout(heartbeatTimer); heartbeatTimer = undefined; runningHeartbeat = undefined; context?.ui.setWidget('pi-reminders', undefined); context = undefined; });
+  pi.on('session_shutdown', () => { clearTimer(); if (meetingTimer) clearTimeout(meetingTimer); meetingTimer = undefined; if (heartbeatTimer) clearTimeout(heartbeatTimer); heartbeatTimer = undefined; runningHeartbeat = undefined; context?.ui.setWidget('pi-reminders', undefined); context = undefined; });
 
   pi.registerCommand('remind', {
     description: 'Schedule a session reminder: /remind <30m|2h|15:30|ISO date> <text>',

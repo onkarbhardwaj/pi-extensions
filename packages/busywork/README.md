@@ -43,6 +43,22 @@ helpers/bin/meetings [today|tomorrow|YYYY-MM-DD] [--json]
 
 The first run asks macOS for calendar access for the calling terminal.
 
+## Meeting reminders
+
+When the helper is compiled, busywork runs it every 15 minutes in terminal mode and adds
+a reminder 5 minutes before each upcoming meeting you accepted, marked tentative, or
+organized. Reminders read `📅 <title> at <time>`.
+
+- Syncing again never duplicates a meeting, and a dismissed meeting is not added back.
+- Snoozed meeting reminders keep their snoozed time.
+- If a meeting is cancelled, declined, moved, or deleted, its still-scheduled reminder is
+  removed; a moved meeting gets a new reminder.
+
+Configure it in `~/.pi/agent/busywork.json` (see [`config.example.json`](config.example.json)).
+Set `"enabled": false` to turn meeting sync off. `command` points to a different helper,
+`leadMinutes` and `intervalMinutes` (at least 5) set timing, and `statuses` chooses which
+RSVP states get reminders. Reload Pi after changing the file.
+
 ## Test
 
 From this package: `npm test`. From the repository root: `npm test`.

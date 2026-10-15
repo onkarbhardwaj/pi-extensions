@@ -15,7 +15,9 @@
   "files": [
     "src",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "helpers/meetings.swift",
+    "config.example.json"
   ],
   "pi": {
     "extensions": [
