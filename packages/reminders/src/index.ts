@@ -137,7 +137,7 @@ export default function (pi: ExtensionAPI) {
               let row = '', at = 0;
               for (const span of spans.filter(s => s.x < width)) {
                 row += theme.style(sliceByColumn(padded, at, span.x - at), { fg, bg });
-                row += theme.style(sliceByColumn(padded, span.x, Math.min(span.width, width - span.x)), { fg, bg: span.selected ? selectedBg : bg, bold: span.selected });
+                row += theme.style(sliceByColumn(padded, span.x, Math.min(span.width, width - span.x)), { fg: 'muted', bg: span.selected ? selectedBg : bg, bold: span.selected });
                 at = span.x + span.width;
               }
               lines.push(row + theme.style(sliceByColumn(padded, at, Math.max(0, width - at)), { fg, bg }));
@@ -145,8 +145,8 @@ export default function (pi: ExtensionAPI) {
             for (const reminder of reminders) {
               lines.push(paint(`Reminder: ${reminder.text}`));
               const state = reminder.status === 'scheduled' ? 'Scheduled' : reminder.status === 'due' ? 'Due' : 'Missed';
-              buttonRow([['Dismiss', 'dismiss', reminder.id], ['Snooze', 'snooze', reminder.id]],
-                `${state} · ${new Date(reminder.dueAt).toLocaleString()}`);
+              lines.push(paint(`${state} · ${new Date(reminder.dueAt).toLocaleString()}`));
+              buttonRow([['Dismiss', 'dismiss', reminder.id], ['Snooze', 'snooze', reminder.id]]);
               lines.push(paint(''));
             }
             buttonRow([['Close', 'close', '']]);
