@@ -47,7 +47,7 @@ export default function (pi: ExtensionAPI) {
           reminderLabel && theme.style(` ${reminderLabel} `, { fg, bg: theme.colors.userMessageBg, bold: due || !!stateError }),
           heartbeatLabel && theme.style(` ${heartbeatLabel} `, { fg, bg: theme.colors.toolSuccessBg, bold: !!heartbeatError }),
         ].filter(Boolean);
-        return ['', truncateToWidth(chips.join('   '), width)];
+        return [truncateToWidth(chips.join(' '), width)];
       },
       handleMouse(event: any) {
         if (event.type !== 'click' || event.button !== 'left') return;
