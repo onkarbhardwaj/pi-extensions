@@ -34,7 +34,7 @@ export default function (pi: ExtensionAPI) {
   };
   const render = () => {
     if (!context || context.mode !== 'tui') return;
-    const reminderLabel = stateError ? '⏰ state error' : statusText(reminders);
+    const reminderLabel = stateError ? '⏰ state error' : statusText(reminders) ?? '⏰ No reminders';
     const heartbeatLabel = heartbeatError ? '♥ state error' : heartbeatStatusText(heartbeats);
     if (!reminderLabel && !heartbeatLabel) { context.ui.setWidget('pi-reminders', undefined); return; }
     const ctx = context;
@@ -188,7 +188,7 @@ export default function (pi: ExtensionAPI) {
     if (panelOpen || ctx.mode !== 'tui') return;
     panelOpen = true;
     try {
-      if (!(showReminders ? reminders : heartbeats).length) { ctx.ui.notify(`No ${section}.`, 'info'); return; }
+      if (showHeartbeats && !heartbeats.length) { ctx.ui.notify('No heartbeats.', 'info'); return; }
       await ctx.ui.custom<void>((tui, theme, _keys, done) => {
         let selected = 0, regions: any[] = [];
         const actions = () => [
@@ -208,7 +208,7 @@ export default function (pi: ExtensionAPI) {
           }
           } catch (error) { ctx.ui.notify(error instanceof Error ? error.message : String(error), 'error'); }
           selected = Math.min(selected, actions().length - 1);
-          if (!(showReminders ? reminders : heartbeats).length) done(); else tui.requestRender();
+          if (showHeartbeats && !heartbeats.length) done(); else tui.requestRender();
         };
         return frame({
           invalidate() { regions = []; },
@@ -240,6 +240,7 @@ export default function (pi: ExtensionAPI) {
               }
               lines.push(row + theme.style(sliceByColumn(padded, at, Math.max(0, width - at)), { fg, bg }));
             };
+            if (showReminders && !reminders.length) lines.push(paint('No reminders', width, { fg: 'muted' }), paint(''));
             for (const reminder of showReminders ? reminders : []) {
               lines.push(paint(`Reminder: ${reminder.text}`));
               const state = reminder.status === 'scheduled' ? 'Scheduled' : reminder.status === 'due' ? 'Due' : 'Missed';
