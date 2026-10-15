@@ -19,7 +19,21 @@ export default function (pi: ExtensionAPI) {
     render();
     schedule();
   };
-  const render = () => context?.ui.setStatus('pi-reminders', stateError ? '⏰ state error' : statusText(reminders));
+  const render = () => {
+    if (!context || context.mode !== 'tui') return;
+    const label = stateError ? '⏰ state error' : statusText(reminders);
+    if (!label) { context.ui.setWidget('pi-reminders', undefined); return; }
+    const ctx = context;
+    ctx.ui.setWidget('pi-reminders', (_tui, theme) => ({
+      invalidate() {},
+      render(width: number) { return [truncateToWidth(theme.fg('accent', `[ ${label} ]`), width)]; },
+      handleMouse(event: any) {
+        if (event.type !== 'click' || event.button !== 'left') return;
+        void manage(ctx).catch(error => ctx.ui.notify(String(error), 'error'));
+        return { handled: true, render: false };
+      },
+    }), { placement: 'belowEditor' });
+  };
 
   function load(ctx: ExtensionContext, startup = false) {
     context = ctx;
@@ -141,7 +155,7 @@ export default function (pi: ExtensionAPI) {
   pi.on('session_start', (_event, ctx) => { notifiedDue = new Set(); load(ctx, true); });
   pi.on('session_tree', (_event, ctx) => load(ctx));
   pi.on('agent_settled', () => schedule());
-  pi.on('session_shutdown', () => { clearTimer(); context?.ui.setStatus('pi-reminders', undefined); context = undefined; });
+  pi.on('session_shutdown', () => { clearTimer(); context?.ui.setWidget('pi-reminders', undefined); context = undefined; });
 
   pi.registerCommand('remind', {
     description: 'Schedule a session reminder: /remind <30m|2h|15:30|ISO date> <text>',
