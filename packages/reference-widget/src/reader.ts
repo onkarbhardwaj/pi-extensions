@@ -1,8 +1,7 @@
-import { getMarkdownTheme } from '@earendil-works/pi-coding-agent';
-import { Markdown, Marked, Input, Key, matchesKey, visibleWidth, truncateToWidth, sliceByColumn, wrapTextWithAnsi } from '@earendil-works/pi-tui';
+import { Markdown, Input, Key, matchesKey, visibleWidth, truncateToWidth, sliceByColumn, wrapTextWithAnsi } from '@earendil-works/pi-tui';
 import { frame } from './frame.ts';
 import { stripVTControlCharacters } from 'node:util';
-import { diagramMarkdown } from './mermaid.ts';
+import { markdownView } from './md-preview.ts';
 import { excerpt, feedback, labels, safeText, renderedMatches, type Snapshot, type Note } from './core.ts';
 
 type Options = {
@@ -23,7 +22,7 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
   let status = '', busy = false, closed = false, reveal = false, dragging = false, showHelp = false;
   let regions: any[] = [], divider = -1, helpScroll = 0, helpMax = 0;
   let markdown: Markdown | undefined, cachedPath: string | undefined, cachedHash: string | undefined;
-  const input = new Input({ prompt: '' }), parser = new Marked();
+  const input = new Input({ prompt: '' });
   const search = new Input({ prompt: '' });
   let searching = false, query = '', searchKey = '', matchIndex = 0, seekMatch = false;
   let matches: { row: number; start: number; end: number }[] = [];
@@ -117,10 +116,7 @@ export function reader(tui: any, theme: any, done: (result?: string) => void, op
       const file = current();
       if (file?.text !== undefined && !file.error) {
         if (!markdown || cachedPath !== file.path || cachedHash !== file.hash) {
-          markdown = new Markdown(safeText(file.text.replace(/\r\n/g, '\n')), 0, 0, getMarkdownTheme(), undefined, {
-            transform: (text, columns) => parser.lexer(text).map(token => token.type === 'code' && token.lang?.trim().toLowerCase() === 'mermaid'
-              ? diagramMarkdown(token.text, token.raw, columns) : token.raw).join(''),
-          }); cachedPath = file.path; cachedHash = file.hash;
+          markdown = markdownView(file.text); cachedPath = file.path; cachedHash = file.hash;
         }
         rows = markdown.render(rightWidth);
       } else rows = [];
