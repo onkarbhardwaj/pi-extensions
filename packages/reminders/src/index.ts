@@ -123,15 +123,16 @@ export default function (pi: ExtensionAPI) {
             const lines: string[] = [paint('Reminders', width, { bold: true }), paint('')];
             regions = [];
             let index = 0;
-            const buttonRow = (buttons: [string, string, string][]) => {
+            const buttonRow = (buttons: [string, string, string][], suffix = '') => {
               let x = 0, plain = '';
               const spans: { x: number; width: number; selected: boolean }[] = [];
               for (const [label, action, id] of buttons) {
                 const size = visibleWidth(label);
                 regions.push({ x, y: lines.length, width: size, id, action, index });
                 spans.push({ x, width: size, selected: index === selected });
-                plain += label + '  '; x += size + 2; index++;
+                plain += label + ' · '; x += size + 3; index++;
               }
+              plain = suffix ? plain + suffix : plain.slice(0, -3);
               const padded = truncateToWidth(plain, width) + ' '.repeat(Math.max(0, width - visibleWidth(truncateToWidth(plain, width))));
               let row = '', at = 0;
               for (const span of spans.filter(s => s.x < width)) {
@@ -142,8 +143,10 @@ export default function (pi: ExtensionAPI) {
               lines.push(row + theme.style(sliceByColumn(padded, at, Math.max(0, width - at)), { fg, bg }));
             };
             for (const reminder of reminders) {
-              lines.push(paint(describe(reminder)));
-              buttonRow([['Dismiss', 'dismiss', reminder.id], ['Snooze 15m', 'snooze', reminder.id]]);
+              lines.push(paint(`Reminder: ${reminder.text}`));
+              const state = reminder.status === 'scheduled' ? 'Scheduled' : reminder.status === 'due' ? 'Due' : 'Missed';
+              buttonRow([['Dismiss', 'dismiss', reminder.id], ['Snooze', 'snooze', reminder.id]],
+                `${state} · ${new Date(reminder.dueAt).toLocaleString()}`);
               lines.push(paint(''));
             }
             buttonRow([['Close', 'close', '']]);
