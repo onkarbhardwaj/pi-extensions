@@ -30,12 +30,11 @@ export default async function (pi: ExtensionAPI) {
           regions = result.regions;
           const dark = theme.appearance !== 'light';
           const fg = dark ? rgbColor(245, 220, 175) : rgbColor(80, 51, 18);
-          const bg = dark ? rgbColor(65, 52, 35) : rgbColor(244, 229, 202);
           return result.lines.map((line: string, y: number) => {
             let styled = '', column = 0;
             for (const region of result.blocks.filter(r => r.y === y)) {
               styled += ' '.repeat(region.x - column);
-              styled += theme.style(sliceByColumn(line, region.x, region.width), { fg, bg });
+              styled += theme.style(sliceByColumn(line, region.x, region.width), { fg });
               column = region.x + region.width;
             }
             return styled;
@@ -148,11 +147,8 @@ export default async function (pi: ExtensionAPI) {
               x: margin + (row.removeX ?? 0), y: index + 3,
               width: Math.min(10, contentWidth - (row.removeX ?? 0)) }]);
             regions.push({ x: margin, y: display.length - 2, width: Math.min(contentWidth, 9) });
-            const dark = theme.appearance !== 'light';
-            const bg = dark ? rgbColor(80, 60, 35) : rgbColor(244, 229, 202);
-            const fg = dark ? rgbColor(255, 233, 195) : rgbColor(80, 51, 18);
-            const selectedBg = dark ? rgbColor(245, 220, 175) : rgbColor(80, 51, 18);
-            const selectedFg = dark ? rgbColor(50, 35, 18) : rgbColor(255, 240, 213);
+            const bg = theme.colors.toolPendingBg, fg = theme.colors.text;
+            const selectedBg = theme.colors.userMessageBg, selectedFg = theme.colors.text;
             return display.map((row, y) => {
               const text = ' '.repeat(margin) + truncateToWidth(row.text, contentWidth);
               const padded = text + ' '.repeat(Math.max(0, w - visibleWidth(text)));
