@@ -60,9 +60,37 @@ No arguments opens the inspection panel. The agent tool supports `list`, `add`, 
 provide more context.
 
 The widget appears below the editor in terminal mode. Click a pill to inspect it;
-use Tab/Enter, Escape, or the mouse in the panel. The `(d)` button appears only when
-diff-review is available in the current terminal session. Click it to review the
-branch matching that pill's label.
+use Tab/Enter, Escape, or the mouse in the panel.
+
+## Ticket pills
+
+A pill whose label contains a configured ticket ID is a ticket pill. When Pi starts on a
+branch whose name contains a ticket ID, that ticket's pill is added automatically.
+
+Every few minutes, while the session is open, pipill asks GitHub (`gh`) for PRs in the
+current repository whose title or branch contains the ticket ID. The pill then shows up
+to two icons and a diff button:
+
+```text
+[DCAI-2425 font export ❌·❗·🔍]
+```
+
+- CI: ⏳ running, ❌ failed, ✅ passed.
+- Review: ❗ changes requested or merge conflict, 👍 approved, 🔀 merged.
+- 🔍 opens diff review for the matched PR's branch, or says that no PR matched.
+
+The panel lists each matched PR with its state and failing checks. Notifications appear
+when CI starts failing, a review needs attention, or a PR merges.
+
+Some repositories have checks that always fail or are not CI. Ignore them per repository
+by full check name or by the job name after `: `:
+
+```json
+{
+  "ticketPrefixes": ["PROJ"],
+  "ci": { "org/repo": { "ignore": ["backend-banned-deps", "Kodiak"] } }
+}
+```
 
 Pills are saved as custom session entries and restored on resume. They are shared
 across navigation within that session, not stored in this package or a global JSON

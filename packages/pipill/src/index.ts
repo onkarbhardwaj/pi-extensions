@@ -6,16 +6,70 @@ import { hasRecentReminder } from './reminder.ts';
 import { Key, matchesKey, visibleWidth, truncateToWidth, wrapTextWithAnsi, sliceByColumn, rgbColor } from '@earendil-works/pi-tui';
 import { Type } from 'typebox';
 import { frame } from './frame.ts';
-import { STATE_TYPE, parseArgs, toolCommand, restore, change, layout } from './core.ts';
+import { STATE_TYPE, parseArgs, toolCommand, restore, change, layout, ticketIds } from './core.ts';
+import { type TicketStatus, currentBranch, currentRepo, describePr, fetchTicketPrs, icons, notableChanges, summarize } from './tickets.ts';
 
 type Pill = { label: string; title?: string; description?: string };
 
 export default async function (pi: ExtensionAPI) {
-  const { ticketPrefixes } = await loadConfig(join(getAgentDir(), 'pipill.json'));
+  const { ticketPrefixes, ci } = await loadConfig(join(getAgentDir(), 'pipill.json'));
   let pills: Pill[] = [];
   let stateError: string | undefined;
   let panelOpen = false;
   let sessionContext: ExtensionContext | undefined;
+  const statuses = new Map<string, TicketStatus>();
+  let repo: string | undefined;
+  let pollTimer: ReturnType<typeof setTimeout> | undefined;
+  let polling = false;
+  const ticketOf = (pill: Pill) => ticketIds(pill.label, ticketPrefixes)[0];
+  const POLL_MS = 3 * 60_000;
+
+  async function pollTickets(ctx: ExtensionContext) {
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = undefined;
+    if (polling || sessionContext !== ctx) return;
+    polling = true;
+    try {
+      const tickets = [...new Set(pills.map(ticketOf).filter(Boolean))] as string[];
+      if (tickets.length) {
+        try { repo ??= await currentRepo(ctx.cwd); } catch { repo = undefined; }
+        const ignore = (repo && ci[repo]?.ignore) || [];
+        for (const ticket of tickets) {
+          let next: TicketStatus;
+          try { next = summarize(await fetchTicketPrs(ticket, ctx.cwd, ignore)); }
+          catch (error) { next = { prs: statuses.get(ticket)?.prs ?? [], error: error instanceof Error ? error.message : String(error), checkedAt: Date.now() }; }
+          if (sessionContext !== ctx) return;
+          for (const message of notableChanges(ticket, statuses.get(ticket), next)) ctx.ui.notify(message, 'warning');
+          statuses.set(ticket, next);
+        }
+        showWidget(ctx);
+      }
+    } finally {
+      polling = false;
+      if (sessionContext === ctx) pollTimer = setTimeout(() => void pollTickets(ctx), POLL_MS);
+    }
+  }
+
+  async function addBranchTicket(ctx: ExtensionContext) {
+    const branch = await currentBranch(ctx.cwd);
+    const ticket = branch && ticketIds(branch, ticketPrefixes)[0];
+    if (!ticket || sessionContext !== ctx || stateError) return;
+    if (pills.some(pill => ticketOf(pill) === ticket)) return;
+    try { mutate(ctx, { action: 'add', pill: { label: ticket, title: `Current branch: ${branch}` } }, false); } catch {}
+  }
+
+  function openDiff(ctx: ExtensionContext, label: string) {
+    const pill = pills.find(p => p.label === label);
+    const ticket = pill && ticketOf(pill);
+    const status = ticket ? statuses.get(ticket) : undefined;
+    if (!ticket) return;
+    if (!status) return ctx.ui.notify(`Still checking PRs for ${ticket}.`, 'info');
+    const pr = status.prs.find(item => item.state === 'OPEN') ?? status.prs[0];
+    if (!pr) return ctx.ui.notify(`No PR matched for ${ticket}.`, 'info');
+    const request = { label: pr.branch, sessionId: ctx.sessionManager.getSessionId(), accepted: false };
+    pi.events.emit('pi-diff-review:open', request);
+    if (!request.accepted) ctx.ui.notify(`Diff review is unavailable. ${ticket}: ${pr.url}`, 'info');
+  }
 
   function showWidget(ctx: ExtensionContext) {
     if (ctx.mode !== 'tui') return;
@@ -24,9 +78,8 @@ export default async function (pi: ExtensionAPI) {
       return {
         invalidate() { regions = []; },
         render(width: number) {
-          const capability = { sessionId: ctx.sessionManager.getSessionId(), available: false };
-          pi.events.emit('pi-diff-review:available', capability);
-          const result = layout(pills, width, visibleWidth, (s: string, w: number) => truncateToWidth(s, w), capability.available);
+          const result = layout(pills, width, visibleWidth, (s: string, w: number) => truncateToWidth(s, w),
+            (pill: Pill) => { const ticket = ticketOf(pill); return ticket ? icons(statuses.get(ticket)) : undefined; });
           regions = result.regions;
           const dark = theme.appearance !== 'light';
           const fg = dark ? rgbColor(245, 220, 175) : rgbColor(80, 51, 18);
@@ -44,10 +97,8 @@ export default async function (pi: ExtensionAPI) {
           if (event.type !== 'click' || event.button !== 'left') return;
           const hit = regions.find(r => event.y === r.y && event.x >= r.x && event.x < r.x + r.width);
           if (!hit) return;
-          if (hit.action === 'diff') {
-            const request = { label: hit.label, sessionId: ctx.sessionManager.getSessionId(), accepted: false };
-            pi.events.emit('pi-diff-review:open', request);
-          } else {
+          if (hit.action === 'diff') openDiff(ctx, hit.label!);
+          else {
             void inspect(ctx, hit.action === 'inspect' ? hit.label : undefined).catch(e => ctx.ui.notify(String(e), 'error'));
           }
           return { handled: true, render: false };
@@ -124,6 +175,15 @@ export default async function (pi: ExtensionAPI) {
               }
               if (pill.title) rows.push(...wrapTextWithAnsi(pill.title, contentWidth).map(text => ({ text })));
               if (pill.description) rows.push(...wrapTextWithAnsi(pill.description, contentWidth).map(text => ({ text })));
+              const ticket = ticketOf(pill);
+              if (ticket) {
+                const status = statuses.get(ticket);
+                const prLines = !status ? ['Checking PRs…'] : status.error ? [`PR check failed: ${status.error}`]
+                  : status.prs.length ? status.prs.flatMap(pr => [`${describePr(pr)} · ${pr.url}`,
+                    ...(pr.state === 'OPEN' ? pr.failedChecks ?? [] : []).map(check => `  ✗ ${check.name}${check.url ? ' · ' + check.url : ''}`)])
+                  : ['No PR matched.'];
+                for (const line of prLines) rows.push(...wrapTextWithAnsi(line, contentWidth).map(text => ({ text })));
+              }
               rows.push({ text: '' });
             }
             if (!pills.length) rows.push({ text: 'No pills remaining.' });
@@ -182,7 +242,12 @@ export default async function (pi: ExtensionAPI) {
     } finally { panelOpen = false; }
   }
 
-  pi.on('session_start', (_event, ctx) => { sessionContext = ctx; refresh(ctx); });
+  pi.on('session_start', (_event, ctx) => {
+    sessionContext = ctx; repo = undefined; statuses.clear();
+    refresh(ctx);
+    if (ctx.mode === 'tui') void addBranchTicket(ctx).finally(() => pollTickets(ctx));
+  });
+  pi.on('session_shutdown', () => { if (pollTimer) clearTimeout(pollTimer); pollTimer = undefined; sessionContext = undefined; });
   pi.events.on('pi-pills:current', (request: any) => {
     if (!sessionContext || request?.sessionId !== sessionContext.sessionManager.getSessionId()) return;
     try {
