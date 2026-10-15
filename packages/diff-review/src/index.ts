@@ -17,6 +17,7 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify('Capturing diff…', 'info');
         const target = await resolveTarget(config, command.pattern);
         const review = await snapshot(target, command.base);
+        if (review.baseResolutionNote) ctx.ui.notify(review.baseResolutionNote, 'warning');
         if (!review.files.length) { ctx.ui.notify('No changes against the merge base.', 'info'); return; }
         let renderer;
         const notes: any[] = [];
@@ -159,7 +160,7 @@ export default function (pi: ExtensionAPI) {
               const field = searching ? search.render(Math.max(1, fieldWidth - 8)).join('') : '';
               const searchX = margin + total - searchWidth;
               const titleWidth = Math.max(1, total - searchWidth);
-              const title = truncateToWidth(`Review · ${review.repository} · ${review.branch} · base ${review.base}`, titleWidth);
+              const title = truncateToWidth(`Review · ${review.repository} · ${review.branch} · base ${review.base} (${review.baseSource})`, titleWidth);
               const header = [
                 title + ' '.repeat(Math.max(0, total - searchWidth - visibleWidth(title))),
                 `${review.worktree} · ${counter}`,
