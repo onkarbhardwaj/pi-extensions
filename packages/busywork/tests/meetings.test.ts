@@ -20,12 +20,14 @@ test('config can disable sync and rejects unsafe values', () => {
 });
 
 test('eligible upcoming meetings become reminders before they start', () => {
-  const result = sync([], [meeting(), meeting({ id: 'm2', status: 'invited' }), meeting({ id: 'm3', canceled: true }),
+  const result = sync([], [meeting(), meeting({ id: 'm2', status: 'declined' }), meeting({ id: 'm3', canceled: true }),
     meeting({ id: 'm4', start: at('09:00:00') })]);
   assert.equal(result.added, 1);
   assert.equal(result.reminders[0].source, meeting().id);
   assert.equal(result.reminders[0].dueAt, Date.parse(at('10:55:00')));
   assert.match(result.reminders[0].text, /^📅 Stand Up at /);
+  const pending = sync([], [meeting({ status: 'invited' }), meeting({ id: 'g', status: 'unknown' })]).reminders;
+  assert.deepEqual(pending.map(r => r.text.endsWith('(no reply)')), [true, false]);
 });
 
 test('repeated syncs and dismissed meetings add nothing', () => {

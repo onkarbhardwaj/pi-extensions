@@ -9,7 +9,7 @@ export type Meeting = { id: string; title: string; start: string; end: string; s
 export type MeetingsConfig = { enabled: boolean; command?: string; leadMinutes: number; intervalMinutes: number; statuses: MeetingStatus[] };
 
 const STATUSES: MeetingStatus[] = ['accepted', 'tentative', 'declined', 'invited', 'organizer', 'own', 'unknown'];
-export const DEFAULT_MEETINGS: MeetingsConfig = { enabled: true, leadMinutes: 5, intervalMinutes: 15, statuses: ['accepted', 'tentative', 'organizer'] };
+export const DEFAULT_MEETINGS: MeetingsConfig = { enabled: true, leadMinutes: 5, intervalMinutes: 15, statuses: ['accepted', 'tentative', 'organizer', 'invited', 'unknown'] };
 export const DEFAULT_COMMAND = fileURLToPath(new URL('../helpers/bin/meetings', import.meta.url));
 
 export function parseMeetingsConfig(value: unknown): MeetingsConfig {
@@ -112,7 +112,9 @@ export function syncMeetings(reminders: Reminder[], meetings: Meeting[], dismiss
   const known = new Set([...kept.map(reminder => reminder.source).filter(Boolean), ...dismissed]);
   const added: Reminder[] = eligible.filter(meeting => !known.has(meeting.id)).map(meeting => {
     const start = Date.parse(meeting.start);
-    return { id: newId(), text: `📅 ${meeting.title.replace(/[\x00-\x1f\x7f]+/g, ' ').trim() || 'Meeting'} at ${clock(start)}`.slice(0, 500),
+    const title = meeting.title.replace(/[\x00-\x1f\x7f]+/g, ' ').trim() || 'Meeting';
+    const reply = meeting.status === 'invited' ? ' (no reply)' : '';
+    return { id: newId(), text: `📅 ${title} at ${clock(start)}${reply}`.slice(0, 500),
       dueAt: Math.max(start - config.leadMinutes * 60_000, now + 1000), createdAt: now, status: 'scheduled', source: meeting.id };
   });
   const next = [...kept, ...added].sort((a, b) => a.dueAt - b.dueAt);
