@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { randomUUID } from 'node:crypto';
 import { Type } from 'typebox';
+import { Key, matchesKey, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 import { STATE_TYPE, type Reminder, describe, markDue, markMissed, nextDue, parseRemind, parseWhen, restore, statusText, validateText } from './core.ts';
 
 export default function (pi: ExtensionAPI) {
@@ -83,18 +84,57 @@ export default function (pi: ExtensionAPI) {
     panelOpen = true;
     try {
       if (!reminders.length) { ctx.ui.notify('No reminders.', 'info'); return; }
-      const labels = reminders.map(describe);
-      const choice = await ctx.ui.select('Reminders', labels);
-      const reminder = reminders[labels.indexOf(choice ?? '')];
-      if (!reminder) return;
-      const action = await ctx.ui.select(reminder.text, [
-        reminder.status === 'scheduled' ? 'Delete' : 'Dismiss', 'Snooze 10m', 'Snooze 1h', 'Close']);
-      if (action === 'Delete' || action === 'Dismiss') remove(reminder.id);
-      else if (action?.startsWith('Snooze')) {
-        const dueAt = parseWhen(action.endsWith('10m') ? '10m' : '1h');
-        notifiedDue.delete(reminder.id);
-        save(reminders.map(item => item.id === reminder.id ? { ...item, dueAt, status: 'scheduled' as const } : item).sort((a, b) => a.dueAt - b.dueAt));
-      }
+      await ctx.ui.custom<void>((tui, theme, _keys, done) => {
+        let selected = 0, regions: any[] = [];
+        const actions = () => reminders.flatMap(r => [{ id: r.id, action: 'dismiss' }, { id: r.id, action: 'snooze' }]).concat({ id: '', action: 'close' });
+        const run = (target: any) => {
+          if (target.action === 'close') return done();
+          if (target.action === 'dismiss') remove(target.id);
+          else {
+            notifiedDue.delete(target.id);
+            save(reminders.map(item => item.id === target.id ? { ...item, dueAt: parseWhen('15m'), status: 'scheduled' as const } : item).sort((a, b) => a.dueAt - b.dueAt));
+          }
+          selected = Math.min(selected, actions().length - 1);
+          if (!reminders.length) done(); else tui.requestRender();
+        };
+        return {
+          invalidate() { regions = []; },
+          render(width) {
+            const lines: string[] = [theme.bold('Reminders'), ''];
+            regions = [];
+            let index = 0;
+            for (const reminder of reminders) {
+              lines.push(truncateToWidth(describe(reminder), width));
+              const y = lines.length;
+              const buttons = [['[ Dismiss ]', 'dismiss'], ['[ Snooze 15m ]', 'snooze']];
+              let x = 0, row = '';
+              for (const [label, action] of buttons) {
+                const text = index === selected ? theme.fg('accent', label) : label;
+                regions.push({ x, y, width: visibleWidth(label), id: reminder.id, action, index });
+                row += text + '  '; x += visibleWidth(label) + 2; index++;
+              }
+              lines.push(row, '');
+            }
+            const close = '[ Close ]';
+            regions.push({ x: 0, y: lines.length, width: visibleWidth(close), id: '', action: 'close', index });
+            lines.push(index === selected ? theme.fg('accent', close) : close, 'Tab/arrows: choose · Enter: select · Esc: close');
+            return lines.map(line => truncateToWidth(line, width));
+          },
+          handleInput(data) {
+            const count = actions().length;
+            if (matchesKey(data, Key.escape)) done();
+            else if (matchesKey(data, Key.tab) || matchesKey(data, Key.right) || matchesKey(data, Key.down)) { selected = (selected + 1) % count; tui.requestRender(); }
+            else if (matchesKey(data, Key.left) || matchesKey(data, Key.up)) { selected = (selected + count - 1) % count; tui.requestRender(); }
+            else if (matchesKey(data, Key.enter)) run(actions()[selected]);
+          },
+          handleMouse(event) {
+            if (event.type !== 'click' || event.button !== 'left') return;
+            const hit = regions.find(r => r.y === event.y && event.x >= r.x && event.x < r.x + r.width);
+            if (!hit) return;
+            selected = hit.index; run(hit); return { handled: true };
+          },
+        };
+      }, { overlay: true, overlayOptions: { width: '70%', maxHeight: '80%', anchor: 'center' } });
     } finally { panelOpen = false; }
   }
 
@@ -115,7 +155,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
   pi.registerCommand('reminders', {
-    description: 'Show, dismiss, snooze, or delete session reminders.',
+    description: 'Show reminders with one-click dismiss or 15-minute snooze.',
     handler: async (_args, ctx) => { context = ctx; await manage(ctx); },
   });
   pi.registerTool({
