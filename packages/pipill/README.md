@@ -78,7 +78,7 @@ to two icons and a diff button:
 
 - CI: ⏳ running, ❌ failed, ✅ passed.
 - Review: ❗ changes requested or merge conflict, 👍 approved, 🔀 merged.
-- 🔍 opens diff review for the matched PR's branch, or says that no PR matched.
+- 🔍 opens diff review for the matched PR's branch, or for a local branch named after the ticket when there is no PR.
 
 The panel shows topic pills under **Topics** and ticket pills under **Tickets**; the bar uses the same order. It lists each matched PR with its state and failing checks. **Refresh** checks
 again immediately. Notifications appear
