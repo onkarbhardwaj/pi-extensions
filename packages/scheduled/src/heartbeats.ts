@@ -7,12 +7,12 @@ export type Heartbeat = {
   expiresAt?: number; status: HeartbeatStatus; runs: number; lastRunAt?: number; lastResult?: string;
 };
 
-const MIN_INTERVAL = 60_000;
+const MIN_INTERVAL = 300_000;
 
 export function parseInterval(input: string): number {
   if (!/^(?:every\s+)?\d+\s*[a-z]+$/i.test(input.trim())) throw new Error('Use an interval such as 5m, 1h or 1d.');
   const value = parseWhen(input.trim().replace(/^every\s+/i, ''), 0);
-  if (value < MIN_INTERVAL) throw new Error('Heartbeat interval must be at least 1 minute.');
+  if (value < MIN_INTERVAL) throw new Error('Heartbeat interval must be at least 5 minutes.');
   return value;
 }
 

@@ -8,7 +8,7 @@ const beat = (overrides = {}) => ({ id: 'h1', name: 'pr-ci', prompt: 'Check CI',
 test('command accepts interval, optional expiry, name, and multi-word instruction', () => {
   assert.deepEqual(parseHeartbeat('5m until 2h pr-ci Check CI and report changes', now),
     { intervalMs: 300_000, expiresAt: now + 7_200_000, name: 'pr-ci', prompt: 'Check CI and report changes' });
-  assert.throws(() => parseHeartbeat('30s pr-ci Check', now), /Use a positive duration|at least 1 minute/);
+  assert.throws(() => parseHeartbeat('4m pr-ci Check', now), /at least 5 minutes/);
   assert.throws(() => parseHeartbeat('15:30 pr-ci Check', now), /Usage/);
   assert.throws(() => parseHeartbeat('5m bad/name Check', now), /name/);
 });
