@@ -30,6 +30,19 @@ The agent tools `reminder` and `heartbeat` support the same management actions. 
 
 State is saved in the session and restored on resume. Schedules run only while that Pi session is open. A reminder that becomes due while Pi is closed is marked missed.
 
+## Helpers
+
+`helpers/meetings.swift` lists one day's macOS Calendar meetings with your RSVP status
+(accepted, tentative, declined, invited, organizer, own, unknown). Only the source is
+committed; compile it locally:
+
+```text
+swiftc -O helpers/meetings.swift -o helpers/bin/meetings
+helpers/bin/meetings [today|tomorrow|YYYY-MM-DD] [--json]
+```
+
+The first run asks macOS for calendar access for the calling terminal.
+
 ## Test
 
 From this package: `npm test`. From the repository root: `npm test`.
