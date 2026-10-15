@@ -7,12 +7,12 @@ import { Key, matchesKey, visibleWidth, truncateToWidth, wrapTextWithAnsi, slice
 import { Type } from 'typebox';
 import { frame } from './frame.ts';
 import { STATE_TYPE, parseArgs, toolCommand, restore, change, layout, ticketIds } from './core.ts';
-import { type TicketStatus, currentBranch, currentRepo, describePr, fetchTicketPrs, icons, notableChanges, summarize } from './tickets.ts';
+import { type TicketPr, type TicketStatus, currentBranch, currentRepo, describePr, fetchTicketPrs, icons, notableChanges, repoKey, summarize } from './tickets.ts';
 
 type Pill = { label: string; title?: string; description?: string };
 
 export default async function (pi: ExtensionAPI) {
-  const { ticketPrefixes, ci } = await loadConfig(join(getAgentDir(), 'pipill.json'));
+  const { ticketPrefixes, repos, ci } = await loadConfig(join(getAgentDir(), 'pipill.json'));
   let pills: Pill[] = [];
   let stateError: string | undefined;
   let panelOpen = false;
@@ -22,7 +22,7 @@ export default async function (pi: ExtensionAPI) {
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
   let polling = false;
   const ticketOf = (pill: Pill) => ticketIds(pill.label, ticketPrefixes)[0];
-  const POLL_MS = 3 * 60_000;
+  const POLL_MS = 5 * 60_000;
 
   async function pollTickets(ctx: ExtensionContext) {
     if (pollTimer) clearTimeout(pollTimer);
@@ -32,12 +32,17 @@ export default async function (pi: ExtensionAPI) {
     try {
       const tickets = [...new Set(pills.map(ticketOf).filter(Boolean))] as string[];
       if (tickets.length) {
-        try { repo ??= await currentRepo(ctx.cwd); } catch { repo = undefined; }
-        const ignore = (repo && ci[repo]?.ignore) || [];
+        if (!repos.length) { try { repo ??= await currentRepo(ctx.cwd); } catch { repo = undefined; } }
+        const targets = repos.length ? repos : repo ? [repo] : [];
         for (const ticket of tickets) {
           let next: TicketStatus;
-          try { next = summarize(await fetchTicketPrs(ticket, ctx.cwd, ignore)); }
-          catch (error) { next = { prs: statuses.get(ticket)?.prs ?? [], error: error instanceof Error ? error.message : String(error), checkedAt: Date.now() }; }
+          const found: TicketPr[] = [], errors: string[] = [];
+          await Promise.all(targets.map(target => fetchTicketPrs(ticket, ctx.cwd, target, ci[repoKey(target)]?.ignore)
+            .then(prs => { found.push(...prs); }, error => { errors.push(`${repoKey(target)}: ${error instanceof Error ? error.message : String(error)}`); })));
+          found.sort((a, b) => Number(b.state === 'OPEN') - Number(a.state === 'OPEN') || b.number - a.number);
+          if (!targets.length) next = { prs: [], error: 'No GitHub repository found for this directory.', checkedAt: Date.now() };
+          else if (errors.length === targets.length) next = { prs: statuses.get(ticket)?.prs ?? [], error: errors.join('; '), checkedAt: Date.now() };
+          else next = { ...summarize(found), error: errors.length ? errors.join('; ') : undefined };
           if (sessionContext !== ctx) return;
           for (const message of notableChanges(ticket, statuses.get(ticket), next)) ctx.ui.notify(message, 'warning');
           statuses.set(ticket, next);
@@ -142,6 +147,14 @@ export default async function (pi: ExtensionAPI) {
         let scroll = 0, maxScroll = 0;
         let initialTarget = label;
         let focused: string | undefined; // Undefined means Close, the safe default.
+        const REFRESH = '\u0000refresh';
+        const hasTickets = () => pills.some(pill => ticketOf(pill));
+        let refreshing = false;
+        const refreshStatus = () => {
+          if (refreshing) return;
+          refreshing = true; tui.requestRender();
+          void pollTickets(ctx).finally(() => { refreshing = false; tui.requestRender(); });
+        };
         let revealFocus = false;
         let regions: { label?: string; x: number; y: number; width: number }[] = [];
         const remove = (target: string) => {
@@ -150,7 +163,7 @@ export default async function (pi: ExtensionAPI) {
           tui.requestRender();
         };
         const moveFocus = () => {
-          const choices = [undefined, ...pills.map(p => p.label)];
+          const choices = [undefined, ...(hasTickets() ? [REFRESH] : []), ...pills.map(p => p.label)];
           focused = choices[(choices.indexOf(focused) + 1) % choices.length];
           revealFocus = true;
           tui.requestRender();
@@ -178,8 +191,9 @@ export default async function (pi: ExtensionAPI) {
               const ticket = ticketOf(pill);
               if (ticket) {
                 const status = statuses.get(ticket);
-                const prLines = !status ? ['Checking PRs…'] : status.error ? [`PR check failed: ${status.error}`]
-                  : status.prs.length ? status.prs.flatMap(pr => [`${describePr(pr)} · ${pr.url}`,
+                const multi = new Set(status?.prs.map(pr => pr.repo)).size > 1 || repos.length > 1;
+                const prLines = !status ? ['Checking PRs…'] : status.error && !status.prs.length ? [`PR check failed: ${status.error}`]
+                  : status.prs.length ? status.prs.flatMap(pr => [`${multi && pr.repo ? pr.repo.split('/')[1] + ' ' : ''}${describePr(pr)} · ${pr.url}`,
                     ...(pr.state === 'OPEN' ? pr.failedChecks ?? [] : []).map(check => `  ✗ ${check.name}${check.url ? ' · ' + check.url : ''}`)])
                   : ['No PR matched.'];
                 for (const line of prLines) rows.push(...wrapTextWithAnsi(line, contentWidth).map(text => ({ text })));
@@ -202,11 +216,13 @@ export default async function (pi: ExtensionAPI) {
             scroll = Math.max(0, Math.min(scroll, maxScroll));
             const visible = rows.slice(scroll, scroll + available);
             const display = [{ text: '' }, { text: 'Active', bold: true }, { text: '' }, ...visible,
-              { text: '' }, { text: '[ Close ]' }, { text: '↑↓/wheel: scroll · Tab: choose · Enter: select · Esc: close' }];
+              { text: '' }, { text: '[ Close ]' + (hasTickets() ? (refreshing ? '  Refreshing…' : '  [ Refresh ]') : '') },
+              { text: '↑↓/wheel: scroll · Tab: choose · Enter: select · Esc: close' }];
             regions = visible.flatMap((row, index) => row.remove === undefined ? [] : [{ label: row.remove,
               x: margin + (row.removeX ?? 0), y: index + 3,
               width: Math.min(10, contentWidth - (row.removeX ?? 0)) }]);
             regions.push({ x: margin, y: display.length - 2, width: Math.min(contentWidth, 9) });
+            if (hasTickets() && !refreshing && contentWidth >= 22) regions.push({ label: REFRESH, x: margin + 11, y: display.length - 2, width: 11 });
             const bg = theme.colors.toolPendingBg, fg = theme.colors.text;
             const selectedBg = theme.colors.userMessageBg, selectedFg = theme.colors.text;
             return display.map((row, y) => {
@@ -224,7 +240,7 @@ export default async function (pi: ExtensionAPI) {
             else if (matchesKey(data, Key.tab) || matchesKey(data, Key.right)) moveFocus();
             else if (matchesKey(data, Key.up)) { scroll = Math.max(0, scroll - 1); tui.requestRender(); }
             else if (matchesKey(data, Key.down)) { scroll = Math.min(maxScroll, scroll + 1); tui.requestRender(); }
-            else if (matchesKey(data, Key.enter)) { if (focused === undefined) done(); else remove(focused); }
+            else if (matchesKey(data, Key.enter)) { if (focused === undefined) done(); else if (focused === REFRESH) refreshStatus(); else remove(focused); }
           },
           handleMouse(event) {
             if (event.type === 'wheel') {
@@ -234,7 +250,7 @@ export default async function (pi: ExtensionAPI) {
             if (event.type !== 'click' || event.button !== 'left') return;
             const hit = regions.find(r => r.y === event.y && event.x >= r.x && event.x < r.x + r.width);
             if (!hit) return;
-            if (hit.label === undefined) done(); else remove(hit.label);
+            if (hit.label === undefined) done(); else if (hit.label === REFRESH) refreshStatus(); else remove(hit.label);
             return { handled: true };
           },
         }, theme);

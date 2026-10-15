@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 export type CiConfig = { ignore: string[] };
-export type PipillConfig = { ticketPrefixes: string[]; ci: Record<string, CiConfig> };
+export type PipillConfig = { ticketPrefixes: string[]; repos: string[]; ci: Record<string, CiConfig> };
 
 function parseCi(value: unknown): Record<string, CiConfig> {
   if (value === undefined) return {};
@@ -26,14 +26,17 @@ export function parseConfig(value: unknown): PipillConfig {
     typeof prefix !== 'string' || !/^[A-Za-z][A-Za-z0-9_]*$/.test(prefix))) {
     throw new Error('ticketPrefixes must contain project keys without hyphens, such as PROJ.');
   }
-  return { ticketPrefixes: [...new Set(prefixes.map(prefix => prefix.toUpperCase()))], ci: parseCi((value as any).ci) };
+  const repos = (value as any).repos ?? [];
+  if (!Array.isArray(repos) || repos.some(repo => typeof repo !== 'string' || !/^(?:[\w.-]+\/)?[\w.-]+\/[\w.-]+$/.test(repo)))
+    throw new Error('repos must contain owner/repo or host/owner/repo names.');
+  return { ticketPrefixes: [...new Set(prefixes.map(prefix => prefix.toUpperCase()))], repos, ci: parseCi((value as any).ci) };
 }
 
 export async function loadConfig(path: string): Promise<PipillConfig> {
   let source: string;
   try { source = await readFile(path, 'utf8'); }
   catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { ticketPrefixes: [], ci: {} };
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { ticketPrefixes: [], repos: [], ci: {} };
     throw error;
   }
   return parseConfig(JSON.parse(source));
