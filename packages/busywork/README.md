@@ -46,8 +46,10 @@ The first run asks macOS for calendar access for the calling terminal.
 ## Meeting reminders
 
 When the helper is compiled, busywork runs it every 15 minutes in terminal mode and adds
-a reminder 5 minutes before each upcoming meeting you accepted, marked tentative, or
-organized. Reminders read `📅 <title> at <time>`.
+a reminder 5 minutes before each upcoming meeting you accepted, marked tentative,
+organized, have not answered, or were invited to without being listed individually
+(`unknown`, such as invitations sent to a group). Reminders read `📅 <title> at <time>`;
+unanswered invitations add `(no reply)`.
 
 - Syncing again never duplicates a meeting, and a dismissed meeting is not added back.
 - Snoozed meeting reminders keep their snoozed time.
