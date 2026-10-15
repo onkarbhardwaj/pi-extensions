@@ -20,7 +20,7 @@ Times can be durations (`30m`, `2h`, `1d`), a local clock time (`15:30`), or a f
 /heartbeat 15m until 2h review Summarize new review comments
 ```
 
-A heartbeat sends its instruction to the agent on an interval. It starts a turn only when Pi is idle and has no queued messages. If several intervals are missed, it runs once, then schedules the next interval from that run. The minimum interval is one minute, and `until` sets an optional expiry.
+A heartbeat sends its instruction to the agent on an interval. It starts a turn only when Pi is idle and has no queued messages. If several intervals are missed, it runs once, then schedules the next interval from that run. The minimum interval is five minutes, and `until` sets an optional expiry.
 
 ## Panel
 

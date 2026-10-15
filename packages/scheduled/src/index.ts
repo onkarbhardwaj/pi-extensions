@@ -332,7 +332,7 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({
       action: Type.Union([Type.Literal('list'), Type.Literal('add'), Type.Literal('pause'), Type.Literal('resume'), Type.Literal('stop')]),
       name: Type.Optional(Type.String({ description: 'Heartbeat name. Required except for list.' })),
-      every: Type.Optional(Type.String({ description: 'For add: interval such as 5m or 1h; minimum 1m.' })),
+      every: Type.Optional(Type.String({ description: 'For add: interval such as 5m or 1h; minimum 5m.' })),
       until: Type.Optional(Type.String({ description: 'For add: optional expiry such as 2h, 11:30, or future ISO date.' })),
       instruction: Type.Optional(Type.String({ description: 'For add: instruction to send on each heartbeat.' })),
     }, { additionalProperties: false }),
