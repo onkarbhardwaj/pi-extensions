@@ -208,7 +208,8 @@ export function colAtX(row: VisualRow, x: number) {
   return col;
 }
 
-type EditorStyle = { text: (s: string) => string; cursor: (s: string) => string; muted: (s: string) => string };
+/** How the editor draws its cursor; text is returned plain so the owner can colour rows. */
+type EditorStyle = { cursor: (s: string) => string };
 
 /**
  * A multi-line document editor that fills whatever height its owner gives it.
@@ -249,11 +250,11 @@ export class MarkdownEditor implements Component {
     for (let y = 0; y < height; y++) {
       const index = this.scroll + y, row = rows[index];
       if (!row) { out.push(''); continue; }
-      if (index !== at || !this.focused) { out.push(this.style.text(row.text)); continue; }
+      if (index !== at || !this.focused) { out.push(row.text); continue; }
       const offset = this.buffer.position.col - row.start;
       const before = row.text.slice(0, offset), rest = row.text.slice(offset);
       const under = graphemes(rest)[0] ?? ' ';
-      const line = this.style.text(before) + this.style.cursor(under) + this.style.text(rest.slice(rest ? under.length : 0));
+      const line = before + this.style.cursor(under) + rest.slice(rest ? under.length : 0);
       out.push(line);
     }
     return out;

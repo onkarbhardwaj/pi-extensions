@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MarkdownEditor, TextBuffer, colAtX, cursorRow, layoutRows, normalizeText } from '../src/md-editor.ts';
 
-const style = { text: (s: string) => s, cursor: (s: string) => `[${s}]`, muted: (s: string) => s };
+const style = { cursor: (s: string) => `[${s}]` };
 const typed = (buffer: TextBuffer, text: string) => { for (const c of text) buffer.insert(c); };
 
 test('text is normalized and edits split and join lines', () => {

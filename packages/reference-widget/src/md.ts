@@ -17,9 +17,7 @@ export const PREVIEW_INTERVAL_MS = 150;
 export function mdPanel(tui: any, theme: any, done: () => void, opened: MdFile) {
   let file = opened, savedText = file.text.replace(/\r\n/g, '\n');
   const buffer = new TextBuffer(file.text);
-  const editor = new MarkdownEditor(buffer, {
-    text: s => s, cursor: s => theme.style(s, { inverse: true }), muted: s => theme.fg('muted', s),
-  });
+  const editor = new MarkdownEditor(buffer, { cursor: s => theme.style(s, { inverse: true }) });
   const preview = new MarkdownPreview();
   preview.setText(buffer.text);
   let mode: Mode | undefined, focused: Control = 'editor', componentFocused = false;

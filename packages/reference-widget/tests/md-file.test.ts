@@ -18,7 +18,7 @@ test('a missing file opens empty and is created on save with a trailing newline'
   const saved = await saveMdFile(file, '# Title');
   assert.equal(await readFile(path, 'utf8'), '# Title\n');
   assert.equal(saved.exists, true);
-  assert.deepEqual(await readdir(dir), ['new.md'], 'no temporary file is left behind');
+  assert.deepEqual(await readdir(dir), ['new.md'], 'nothing else appears beside the document');
 });
 
 test('saving keeps CRLF line endings and file permissions', async t => {
@@ -52,5 +52,7 @@ test('outside edits are detected; directories, large and binary files are refuse
   await assert.rejects(openMdFile(join(dir, 'bin.md')), /binary/);
   await writeFile(join(dir, 'big.md'), 'x'.repeat(2 * 1024 * 1024 + 1));
   await assert.rejects(openMdFile(join(dir, 'big.md')), /larger than 2 MB/);
-  await assert.rejects(saveMdFile(await openMdFile(join(dir, 'missing', 'x.md')), 'x'), /does not exist/);
+  await assert.rejects(openMdFile(join(dir, 'missing', 'x.md')), /does not exist/);
+  // /dev is its own file system on macOS and Linux, standing in for an external volume.
+  await assert.rejects(openMdFile('/dev/pi-md-test.md'), /another volume/);
 });
