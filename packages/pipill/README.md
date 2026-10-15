@@ -67,8 +67,9 @@ use Tab/Enter, Escape, or the mouse in the panel.
 A pill whose label contains a configured ticket ID is a ticket pill. When Pi starts on a
 branch whose name contains a ticket ID, that ticket's pill is added automatically.
 
-Every few minutes, while the session is open, pipill asks GitHub (`gh`) for PRs in the
-current repository whose title or branch contains the ticket ID. The pill then shows up
+Every 5 minutes while the session is open, pipill asks GitHub (`gh`) for PRs whose
+title or branch contains the ticket ID. It searches the configured `repos`, or the
+current repository when none are configured. Use `host/owner/repo` for GitHub Enterprise. The pill then shows up
 to two icons and a diff button:
 
 ```text
@@ -79,7 +80,8 @@ to two icons and a diff button:
 - Review: ❗ changes requested or merge conflict, 👍 approved, 🔀 merged.
 - 🔍 opens diff review for the matched PR's branch, or says that no PR matched.
 
-The panel lists each matched PR with its state and failing checks. Notifications appear
+The panel lists each matched PR with its state and failing checks. **Refresh** checks
+again immediately. Notifications appear
 when CI starts failing, a review needs attention, or a PR merges.
 
 Some repositories have checks that always fail or are not CI. Ignore them per repository
@@ -88,6 +90,7 @@ by full check name or by the job name after `: `:
 ```json
 {
   "ticketPrefixes": ["PROJ"],
+  "repos": ["org/repo", "github.example.com/team/service"],
   "ci": { "org/repo": { "ignore": ["backend-banned-deps", "Kodiak"] } }
 }
 ```
