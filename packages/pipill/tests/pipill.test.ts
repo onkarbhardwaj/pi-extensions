@@ -11,13 +11,13 @@ test('missing configuration uses neutral defaults; personal prefixes normalize o
   const dir = await mkdtemp(join(tmpdir(), 'pipill-test-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const path = join(dir, 'pipill.json');
-  assert.deepEqual(await loadConfig(path), { ticketPrefixes: [] });
-  await writeFile(path, JSON.stringify({ ticketPrefixes: ['proj', 'OPS', 'PROJ'] }));
-  assert.deepEqual(await loadConfig(path), { ticketPrefixes: ['PROJ', 'OPS'] });
+  assert.deepEqual(await loadConfig(path), { ticketPrefixes: [], ci: {} });
+  await writeFile(path, JSON.stringify({ ticketPrefixes: ['proj', 'OPS', 'PROJ'], ci: { 'Org/Repo': { ignore: ['Kodiak'] } } }));
+  assert.deepEqual(await loadConfig(path), { ticketPrefixes: ['PROJ', 'OPS'], ci: { 'org/repo': { ignore: ['Kodiak'] } } });
 });
 
 test('invalid configuration is reported instead of replacing the user policy', async t => {
-  for (const value of [null, [], { ticketPrefixes: 'PROJ' }, { ticketPrefixes: ['PROJ-'] }, { ticketPrefixes: [12] }]) {
+  for (const value of [null, [], { ticketPrefixes: 'PROJ' }, { ticketPrefixes: ['PROJ-'] }, { ticketPrefixes: [12] }, { ci: { repo: {} } }, { ci: { 'o/r': { ignore: [''] } } }]) {
     assert.throws(() => parseConfig(value));
   }
   const dir = await mkdtemp(join(tmpdir(), 'pipill-invalid-'));
@@ -78,25 +78,21 @@ test('standalone context includes current labels and only configured ticket poli
   assert.match(toolDescription(['PROJ']), /PROJ-/);
 });
 
-test('optional diff controls are absent unless the current session reports availability', () => {
-  const pills = [{ label: 'review' }];
-  const widthOf = s => s.length, truncate = (s, w) => s.slice(0, Math.max(0, w));
-  const hidden = layout(pills, 80, widthOf, truncate);
-  assert.ok(hidden.lines.every(line => !line.includes('(d)')));
-  assert.ok(hidden.regions.every(region => region.action !== 'diff'));
-  assert.ok(hidden.regions.some(region => region.action === 'inspect'));
-  assert.ok(hidden.regions.some(region => region.action === 'panel'));
-  const shown = layout(pills, 80, widthOf, truncate, true);
-  assert.ok(shown.lines.some(line => line.includes('(d)')));
-  const hit = shown.regions.find(region => region.action === 'diff');
-  assert.equal(shown.lines[hit.y].slice(hit.x, hit.x + hit.width), '(d)');
-  const hiddenAgain = layout(pills, 80, widthOf, truncate, false);
-  assert.ok(hiddenAgain.regions.every(region => region.action !== 'diff'));
+test('only ticket pills get status icons and a diff target', () => {
+  // Emoji occupy two terminal columns.
+  const cells = s => [...s].flatMap(c => /\p{Extended_Pictographic}/u.test(c) ? [c, ''] : [c]);
+  const visibleWidth = s => cells(s).length, truncateToWidth = (s, w) => cells(s).slice(0, Math.max(0, w)).join('');
+  const sliceByColumn = (s, x, w) => cells(s).slice(x, x + w).join('');
+  const result = layout([{ label: 'topic' }, { label: 'T-1 fix' }], 80, visibleWidth, truncateToWidth, pill => pill.label.startsWith('T-') ? ['❌', '❗'] : undefined);
+  assert.equal(result.lines[0], '[+] [topic] [T-1 fix ❌·❗·🔍]');
+  const diff = result.regions.find(region => region.action === 'diff');
+  assert.equal(sliceByColumn(result.lines[0], diff.x, diff.width), '🔍');
+  assert.equal(result.regions.filter(region => region.action === 'diff').length, 1);
 });
 
 test('narrow terminal layouts keep reminder labels within the available columns', () => {
-  for (const diffAvailable of [false, true]) for (const width of [1, 5, 8, 9, 11, 12, 20, 80]) {
-    const result = layout([{ label: 'a-long-reminder-label' }], width, s => s.length, (s, w) => s.slice(0, Math.max(0, w)), diffAvailable);
+  for (const ticket of [() => undefined, () => ['x']]) for (const width of [1, 5, 8, 9, 11, 12, 20, 80]) {
+    const result = layout([{ label: 'a-long-reminder-label' }], width, s => s.length, (s, w) => s.slice(0, Math.max(0, w)), ticket);
     assert.ok(result.lines.every(line => line.length <= width));
     assert.ok(result.regions.every(region => region.x + region.width <= width));
   }

@@ -82,7 +82,8 @@ export function change(pills, command, ticketPrefixes = []) {
 }
 
 // Rendering and hit testing share the same terminal-column layout.
-export function layout(pills, width, visibleWidth, truncate, diffAvailable = false) {
+// `ticket(pill)` returns status icons for ticket pills; ticket pills always end with a 🔍 diff target.
+export function layout(pills, width, visibleWidth, truncate, ticket = _pill => undefined) {
   if (width < 1) return { lines: [], regions: [], blocks: [] };
   const lines = [], regions = [], blocks = [];
   let line = '', x = 0, y = 0;
@@ -97,19 +98,22 @@ export function layout(pills, width, visibleWidth, truncate, diffAvailable = fal
   const launcher = truncate('[+]', width);
   append(launcher, [{ action: 'panel', x: 0, width: visibleWidth(launcher) }]);
   for (const pill of pills) {
-    if (width < (diffAvailable ? 7 : 3)) {
+    const status = ticket(pill);
+    const suffix = status ? ' ' + [...status, '🔍'].join('·') : '';
+    const suffixWidth = visibleWidth(suffix);
+    if (width < suffixWidth + 3) {
       const text = truncate(`[${pill.label}]`, width);
       append(text, [{ action: 'inspect', label: pill.label, x: 0, width: visibleWidth(text) }]);
       continue;
     }
-    const label = truncate(pill.label, width - (diffAvailable ? 6 : 2));
-    const text = diffAvailable ? `[${label} (d)]` : `[${label}]`;
-    const diffX = visibleWidth(`[${label} `);
-    append(text, diffAvailable ? [
-      { action: 'inspect', label: pill.label, x: 0, width: diffX },
-      { action: 'diff', label: pill.label, x: diffX, width: 3 },
-      { action: 'inspect', label: pill.label, x: diffX + 3, width: 1 },
-    ] : [{ action: 'inspect', label: pill.label, x: 0, width: visibleWidth(text) }]);
+    const label = truncate(pill.label, width - 2 - suffixWidth);
+    const text = `[${label}${suffix}]`;
+    const total = visibleWidth(text);
+    append(text, status ? [
+      { action: 'inspect', label: pill.label, x: 0, width: total - 3 },
+      { action: 'diff', label: pill.label, x: total - 3, width: 2 },
+      { action: 'inspect', label: pill.label, x: total - 1, width: 1 },
+    ] : [{ action: 'inspect', label: pill.label, x: 0, width: total }]);
   }
   if (line) lines.push(line);
   return { lines, regions, blocks };
