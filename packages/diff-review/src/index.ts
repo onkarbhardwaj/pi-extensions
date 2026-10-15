@@ -187,7 +187,8 @@ export default function (pi: ExtensionAPI) {
                 : paint('Search: /', fieldWidth);
               display[0] = paint(' '.repeat(margin) + header[0], searchX, { bold: true })
                 + searchField + paint(count, countWidth, searchStyle) + paint('', margin);
-              const bodyHeight = Math.min(viewport, Math.max(visible.length, listWidth ? Math.min(review.files.length, viewport) : 0));
+              // Always fill the viewport so the panel keeps one size across files and diffs.
+              const bodyHeight = viewport;
               const fileStart = Math.max(0, Math.min(fileIndex - Math.floor(bodyHeight / 2), review.files.length - bodyHeight));
               dividerX = listWidth ? margin + listWidth + 1 : -1;
               dividerTop = header.length;
