@@ -24,7 +24,7 @@ A heartbeat sends its instruction to the agent on an interval. It starts a turn 
 
 ## Panel
 
-Click the indicator, or run `/reminders` or `/heartbeats`, to open the shared panel. Reminders have **Dismiss** and **Snooze**. Heartbeats have **Pause** or **Resume**, and **Stop**. Click a heartbeat name to show its instruction and latest result.
+Click the reminders indicator or run `/reminders` to manage reminders. Click the heartbeats indicator or run `/heartbeats` to manage heartbeats. Reminders have **Dismiss** and **Snooze**. Heartbeats have **Pause** or **Resume**, and **Stop**. Click a heartbeat name to show its instruction and latest result.
 
 The agent tools `reminder` and `heartbeat` support the same management actions. They should change schedules only when the user asks.
 

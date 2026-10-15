@@ -51,7 +51,10 @@ export default function (pi: ExtensionAPI) {
       },
       handleMouse(event: any) {
         if (event.type !== 'click' || event.button !== 'left') return;
-        void manage(ctx).catch(error => ctx.ui.notify(String(error), 'error'));
+        const reminderWidth = reminderLabel ? visibleWidth(` ${reminderLabel} `) : 0;
+        const section = reminderLabel && event.x < reminderWidth ? 'reminders' : heartbeatLabel && event.x >= (reminderLabel ? reminderWidth + 1 : 0) ? 'heartbeats' : undefined;
+        if (!section) return;
+        void manage(ctx, section).catch(error => ctx.ui.notify(String(error), 'error'));
         return { handled: true, render: false };
       },
     }), { placement: 'belowEditor' });
@@ -180,16 +183,17 @@ export default function (pi: ExtensionAPI) {
     save(next);
   }
 
-  async function manage(ctx: ExtensionContext) {
+  async function manage(ctx: ExtensionContext, section: 'reminders' | 'heartbeats') {
+    const showReminders = section === 'reminders', showHeartbeats = section === 'heartbeats';
     if (panelOpen || ctx.mode !== 'tui') return;
     panelOpen = true;
     try {
-      if (!reminders.length && !heartbeats.length) { ctx.ui.notify('Nothing scheduled.', 'info'); return; }
+      if (!(showReminders ? reminders : heartbeats).length) { ctx.ui.notify(`No ${section}.`, 'info'); return; }
       await ctx.ui.custom<void>((tui, theme, _keys, done) => {
         let selected = 0, regions: any[] = [];
         const actions = () => [
-          ...reminders.flatMap(r => [{ id: r.id, action: 'dismiss' }, { id: r.id, action: 'snooze' }]),
-          ...heartbeats.flatMap(b => [{ id: b.id, action: 'expand' }, ...(b.status === 'expired' ? [] : [{ id: b.id, action: b.status === 'paused' ? 'resume' : 'pause' }]), { id: b.id, action: 'stop' }]),
+          ...(showReminders ? reminders : []).flatMap(r => [{ id: r.id, action: 'dismiss' }, { id: r.id, action: 'snooze' }]),
+          ...(showHeartbeats ? heartbeats : []).flatMap(b => [{ id: b.id, action: 'expand' }, ...(b.status === 'expired' ? [] : [{ id: b.id, action: b.status === 'paused' ? 'resume' : 'pause' }]), { id: b.id, action: 'stop' }]),
           { id: '', action: 'close' },
         ];
         const run = (target: any) => {
@@ -204,7 +208,7 @@ export default function (pi: ExtensionAPI) {
           }
           } catch (error) { ctx.ui.notify(error instanceof Error ? error.message : String(error), 'error'); }
           selected = Math.min(selected, actions().length - 1);
-          if (!reminders.length && !heartbeats.length) done(); else tui.requestRender();
+          if (!(showReminders ? reminders : heartbeats).length) done(); else tui.requestRender();
         };
         return frame({
           invalidate() { regions = []; },
@@ -214,7 +218,7 @@ export default function (pi: ExtensionAPI) {
               const clipped = truncateToWidth(text, Math.max(0, columns));
               return theme.style(clipped + ' '.repeat(Math.max(0, columns - visibleWidth(clipped))), { fg, bg, ...options });
             };
-            const lines: string[] = [paint('Scheduled', width, { bold: true }), paint('')];
+            const lines: string[] = [paint(showReminders ? 'Reminders' : 'Heartbeats', width, { bold: true }), paint('')];
             regions = [];
             let index = 0;
             const buttonRow = (buttons: [string, string, string][], suffix = '') => {
@@ -236,16 +240,14 @@ export default function (pi: ExtensionAPI) {
               }
               lines.push(row + theme.style(sliceByColumn(padded, at, Math.max(0, width - at)), { fg, bg }));
             };
-            if (reminders.length) lines.push(paint('Reminders', width, { bold: true }));
-            for (const reminder of reminders) {
+            for (const reminder of showReminders ? reminders : []) {
               lines.push(paint(`Reminder: ${reminder.text}`));
               const state = reminder.status === 'scheduled' ? 'Scheduled' : reminder.status === 'due' ? 'Due' : 'Missed';
               lines.push(paint(`${state} · ${new Date(reminder.dueAt).toLocaleString()}`));
               buttonRow([['Dismiss', 'dismiss', reminder.id], ['Snooze', 'snooze', reminder.id]]);
               lines.push(paint(''));
             }
-            if (heartbeats.length) lines.push(paint('Heartbeats', width, { bold: true }));
-            for (const heartbeat of heartbeats) {
+            for (const heartbeat of showHeartbeats ? heartbeats : []) {
               const label = `Heartbeat: ${heartbeat.name}`;
               regions.push({ x: 0, y: lines.length, width: visibleWidth(label), id: heartbeat.id, action: 'expand', index });
               lines.push(paint(label, width, index++ === selected ? { bg: selectedBg, bold: true } : {}));
@@ -308,8 +310,8 @@ export default function (pi: ExtensionAPI) {
     },
   });
   pi.registerCommand('reminders', {
-    description: 'Show reminders and heartbeats.',
-    handler: async (_args, ctx) => { context = ctx; await manage(ctx); },
+    description: 'Show reminders.',
+    handler: async (_args, ctx) => { context = ctx; await manage(ctx, 'reminders'); },
   });
   pi.registerCommand('heartbeat', {
     description: 'Run an agent instruction on an interval: /heartbeat <5m|1h> [until <11:30|2h>] <name> <instruction>',
@@ -322,8 +324,8 @@ export default function (pi: ExtensionAPI) {
     },
   });
   pi.registerCommand('heartbeats', {
-    description: 'Show reminders and heartbeats.',
-    handler: async (_args, ctx) => { context = ctx; await manage(ctx); },
+    description: 'Show heartbeats.',
+    handler: async (_args, ctx) => { context = ctx; await manage(ctx, 'heartbeats'); },
   });
   pi.registerTool({
     name: 'heartbeat',
