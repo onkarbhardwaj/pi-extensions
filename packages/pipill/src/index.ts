@@ -69,12 +69,11 @@ export default async function (pi: ExtensionAPI) {
     const ticket = pill && ticketOf(pill);
     const status = ticket ? statuses.get(ticket) : undefined;
     if (!ticket) return;
-    if (!status) return ctx.ui.notify(`Still checking PRs for ${ticket}.`, 'info');
-    const pr = status.prs.find(item => item.state === 'OPEN') ?? status.prs[0];
-    if (!pr) return ctx.ui.notify(`No PR matched for ${ticket}.`, 'info');
-    const request = { label: pr.branch, sessionId: ctx.sessionManager.getSessionId(), accepted: false };
+    const pr = status?.prs.find(item => item.state === 'OPEN') ?? status?.prs[0];
+    // Without a PR, diff review can still find a local branch named after the ticket.
+    const request = { label: pr?.branch ?? ticket, sessionId: ctx.sessionManager.getSessionId(), accepted: false };
     pi.events.emit('pi-diff-review:open', request);
-    if (!request.accepted) ctx.ui.notify(`Diff review is unavailable. ${ticket}: ${pr.url}`, 'info');
+    if (!request.accepted) ctx.ui.notify(`Diff review is unavailable.${pr ? ` ${ticket}: ${pr.url}` : ''}`, 'info');
   }
 
   function showWidget(ctx: ExtensionContext) {
