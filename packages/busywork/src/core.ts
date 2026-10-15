@@ -1,6 +1,6 @@
 export const STATE_TYPE = 'pi-reminders-state';
 export type ReminderStatus = 'scheduled' | 'due' | 'missed';
-export type Reminder = { id: string; text: string; dueAt: number; createdAt: number; status: ReminderStatus };
+export type Reminder = { id: string; text: string; dueAt: number; createdAt: number; status: ReminderStatus; source?: string };
 
 const MINUTE = 60_000;
 const UNIT: Record<string, number> = { m: MINUTE, min: MINUTE, mins: MINUTE, minute: MINUTE, minutes: MINUTE,
@@ -54,7 +54,8 @@ export function restore(entries: any[]): Reminder[] {
     return data.reminders.map((reminder: any) => {
       if (!reminder || typeof reminder.id !== 'string' || ids.has(reminder.id)
         || !Number.isFinite(reminder.dueAt) || !Number.isFinite(reminder.createdAt)
-        || !['scheduled', 'due', 'missed'].includes(reminder.status)) throw new Error('Malformed saved reminder state.');
+        || !['scheduled', 'due', 'missed'].includes(reminder.status)
+        || (reminder.source !== undefined && typeof reminder.source !== 'string')) throw new Error('Malformed saved reminder state.');
       ids.add(reminder.id);
       return { ...reminder, text: validateText(reminder.text) };
     });

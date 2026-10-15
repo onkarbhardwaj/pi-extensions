@@ -1,0 +1,8 @@
+{
+  "meetings": {
+    "enabled": true,
+    "leadMinutes": 5,
+    "intervalMinutes": 15,
+    "statuses": ["accepted", "tentative", "organizer", "invited", "unknown"]
+  }
+}
