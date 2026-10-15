@@ -1,4 +1,4 @@
-# Scheduled
+# Busywork
 
 Reminders and heartbeats for a Pi session, shown together in one clickable indicator below the editor.
 
