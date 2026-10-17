@@ -287,15 +287,16 @@ export default async function (pi: ExtensionAPI) {
               starts.set(pill.label, rows.length);
               const updates = history(pill.label), open = expanded.has(pill.label);
               rows.push({ parts: [
-                ...(updates.length ? [{ text: open ? '⊟' : '⊞', style: accent, target: TOGGLE + pill.label }, { text: ' ' }] : []),
+                ...(updates.length ? [{ text: open ? '-' : '+', style: accent, target: TOGGLE + pill.label }, { text: ' ' }] : []),
                 { text: pillHeading(pill.label, ticket, status), style: { fg: 'mdHeading', bold: true } }] });
               markdown(pillBodyMarkdown(pill));
               // Newest first: dots joined by a vertical line; the oldest shown entry is hollow.
-              const shown = open ? [...updates].reverse() : updates.slice(-1);
+              // Hidden until expanded; then newest first, dots joined by a line, the oldest hollow.
+              const shown = open ? [...updates].reverse() : [];
               shown.forEach((update, i) => {
-                const last = i === shown.length - 1, dot = last && open && shown.length > 1 ? '○' : '●';
+                const last = i === shown.length - 1, dot = last && shown.length > 1 ? '○' : '●';
                 wrapTextWithAnsi(update, Math.max(1, contentWidth - 5)).forEach((line, j) => rows.push({ parts: [
-                  { text: j === 0 ? `  ${dot}  ` : `  ${open && !last ? '│' : ' '}  `, style: muted }, { text: line }] }));
+                  { text: j === 0 ? `  ${dot}  ` : `  ${!last ? '│' : ' '}  `, style: muted }, { text: line }] }));
               });
               if (ticket) markdown(prListMarkdown(status, new Set(status?.prs.map(pr => pr.repo)).size > 1 || repos.length > 1));
               rows.push(buttons([
