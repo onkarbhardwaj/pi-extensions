@@ -11,6 +11,7 @@ import { type TicketPr, type TicketStatus, currentBranch, currentRepo, fetchTick
 import { pillBodyMarkdown, pillHeading, prListMarkdown } from './panel-markdown.ts';
 import { type TimelineState, TIMELINE_STATE_TYPE, applyUpdates, backoffMs, buildInput, newMessages, parseUpdates, restoreTimeline, runSummarizer } from './timeline.ts';
 import type { ChildProcess } from 'node:child_process';
+import { stripVTControlCharacters } from 'node:util';
 
 type Pill = { label: string; title?: string; description?: string };
 
@@ -262,7 +263,9 @@ export default async function (pi: ExtensionAPI) {
               let view = rendered.get(source);
               if (!view) { view = new Markdown(source, 0, 0, getMarkdownTheme()); rendered.set(source, view); }
               used.add(source);
-              rows.push(...view.render(contentWidth).map(line => ({ parts: [{ text: line }], styled: true })));
+              // A pill reads as one unit, so drop the blank lines Markdown puts around its blocks.
+              rows.push(...view.render(contentWidth).filter(line => stripVTControlCharacters(line).trim())
+                .map(line => ({ parts: [{ text: line }], styled: true })));
             };
             const starts = new Map<string, number>();
             const used = new Set<string>();
@@ -270,7 +273,13 @@ export default async function (pi: ExtensionAPI) {
             for (const pill of ordered()) {
               const ticket = ticketOf(pill), status = ticket ? statuses.get(ticket) : undefined;
               const heading = ticket ? 'Tickets' : 'Topics';
-              if (heading !== section) { rows.push(text(heading, { bold: true })); section = heading; }
+              if (heading !== section) {
+                // Gaps grow with the hierarchy: none inside a pill, one between pills, two between sections.
+                if (section) rows.push(text(''));
+                const count = ordered().filter(p => !!ticketOf(p) === !!ticket).length;
+                rows.push(text(`${heading.toUpperCase()} · ${count}`, muted), text(''));
+                section = heading;
+              }
               starts.set(pill.label, rows.length);
               const updates = history(pill.label), open = expanded.has(pill.label);
               rows.push({ parts: [
