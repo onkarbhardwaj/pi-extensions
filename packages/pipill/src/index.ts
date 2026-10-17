@@ -1,13 +1,14 @@
-import { getAgentDir, type ExtensionAPI, type ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { getAgentDir, getMarkdownTheme, type ExtensionAPI, type ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { join } from 'node:path';
 import { loadConfig } from './config.ts';
 import { reminderContext, toolDescription } from './guidance.ts';
 import { hasRecentReminder } from './reminder.ts';
-import { Key, matchesKey, visibleWidth, truncateToWidth, wrapTextWithAnsi, sliceByColumn, rgbColor } from '@earendil-works/pi-tui';
+import { Key, Markdown, matchesKey, visibleWidth, truncateToWidth, sliceByColumn, rgbColor } from '@earendil-works/pi-tui';
 import { Type } from 'typebox';
 import { frame } from './frame.ts';
 import { STATE_TYPE, parseArgs, toolCommand, restore, change, layout, ticketIds } from './core.ts';
-import { type TicketPr, type TicketStatus, currentBranch, currentRepo, describePr, fetchTicketPrs, icons, notableChanges, repoKey, summarize } from './tickets.ts';
+import { type TicketPr, type TicketStatus, currentBranch, currentRepo, fetchTicketPrs, notableChanges, repoKey, summarize } from './tickets.ts';
+import { pillMarkdown } from './panel-markdown.ts';
 
 type Pill = { label: string; title?: string; description?: string };
 
@@ -147,7 +148,9 @@ export default async function (pi: ExtensionAPI) {
         let scroll = 0, maxScroll = 0;
         let initialTarget = label;
         let focused: string | undefined; // Undefined means Close, the safe default.
-        const REFRESH = '\u0000refresh';
+        const REFRESH = '\u0000refresh', DIFF = '\u0000diff:';
+        // Rendered Markdown per pill, reused while its source text is unchanged.
+        const rendered = new Map<string, Markdown>();
         const hasTickets = () => pills.some(pill => ticketOf(pill));
         let refreshing = false;
         const refreshStatus = () => {
@@ -162,42 +165,45 @@ export default async function (pi: ExtensionAPI) {
           focused = undefined;
           tui.requestRender();
         };
+        const activate = (target: string | undefined) => {
+          if (target === undefined) done();
+          else if (target === REFRESH) refreshStatus();
+          else if (target.startsWith(DIFF)) { done(); openDiff(ctx, target.slice(DIFF.length)); }
+          else remove(target);
+        };
         const moveFocus = () => {
-          const choices = [undefined, ...(hasTickets() ? [REFRESH] : []), ...ordered().map(p => p.label)];
+          const choices = [undefined, ...(hasTickets() ? [REFRESH] : []),
+            ...ordered().flatMap(p => ticketOf(p) ? [p.label, DIFF + p.label] : [p.label])];
           focused = choices[(choices.indexOf(focused) + 1) % choices.length];
           revealFocus = true;
           tui.requestRender();
         };
         return frame({
-          invalidate() { regions = []; },
+          invalidate() { regions = []; rendered.clear(); },
           render(width) {
             const w = Math.max(1, width);
             const margin = w >= 8 ? 2 : 0;
             const contentWidth = Math.max(1, w - margin * 2);
-            type Row = { text: string; bold?: boolean; muted?: boolean; buttons?: [string, string | undefined][] };
+            type Row = { text: string; bold?: boolean; muted?: boolean; styled?: boolean; buttons?: [string, string | undefined][] };
             const rows: Row[] = [];
             const buttons = (items: [string, string | undefined][]): Row => ({ text: items.map(([label]) => label).join(' · '), buttons: items });
             const starts = new Map<string, number>();
+            const used = new Set<string>();
             let section: string | undefined;
             for (const pill of ordered()) {
               const heading = ticketOf(pill) ? 'Tickets' : 'Topics';
               if (heading !== section) { rows.push({ text: heading, bold: true }); section = heading; }
               starts.set(pill.label, rows.length);
-              rows.push(...wrapTextWithAnsi(pill.label, contentWidth).map(text => ({ text, bold: true })));
-              if (pill.title) rows.push(...wrapTextWithAnsi(pill.title, contentWidth).map(text => ({ text })));
-              if (pill.description) rows.push(...wrapTextWithAnsi(pill.description, contentWidth).map(text => ({ text })));
-              const ticket = ticketOf(pill);
-              if (ticket) {
-                const status = statuses.get(ticket);
-                const multi = new Set(status?.prs.map(pr => pr.repo)).size > 1 || repos.length > 1;
-                const prLines = !status ? ['Checking PRs…'] : status.error && !status.prs.length ? [`PR check failed: ${status.error}`]
-                  : status.prs.length ? status.prs.flatMap(pr => [`${multi && pr.repo ? pr.repo.split('/')[1] + ' ' : ''}${describePr(pr)} · ${pr.url}`,
-                    ...(pr.state === 'OPEN' ? pr.failedChecks ?? [] : []).map(check => `  ✗ ${check.name}${check.url ? ' · ' + check.url : ''}`)])
-                  : ['No PR matched.'];
-                for (const line of prLines) rows.push(...wrapTextWithAnsi(line, contentWidth).map(text => ({ text })));
-              }
-              rows.push(buttons([['Remove', pill.label]]), { text: '' });
+              const ticket = ticketOf(pill), status = ticket ? statuses.get(ticket) : undefined;
+              const showRepo = new Set(status?.prs.map(pr => pr.repo)).size > 1 || repos.length > 1;
+              const source = pillMarkdown(pill, ticket, status, showRepo);
+              let view = rendered.get(source);
+              if (!view) { view = new Markdown(source, 0, 0, getMarkdownTheme()); rendered.set(source, view); }
+              used.add(source);
+              rows.push(...view.render(contentWidth).map(text => ({ text, styled: true })));
+              rows.push(buttons(ticket ? [['Remove', pill.label], ['Diff', DIFF + pill.label]] : [['Remove', pill.label]]), { text: '' });
             }
+            for (const key of rendered.keys()) if (!used.has(key)) rendered.delete(key);
             if (!pills.length) rows.push({ text: 'No pills remaining.', muted: true }, { text: '' });
             const available = Math.max(1, Math.floor(tui.terminal.rows * 0.8) - 6);
             maxScroll = Math.max(0, rows.length - available);
@@ -229,6 +235,7 @@ export default async function (pi: ExtensionAPI) {
             return display.map((row, y) => {
               const text = ' '.repeat(margin) + truncateToWidth(row.text, contentWidth);
               const padded = text + ' '.repeat(Math.max(0, w - visibleWidth(text)));
+              if (row.styled) return theme.style(padded, { bg });
               if (!row.buttons) return theme.style(padded, { fg: row.muted ? 'muted' : fg, bg, bold: row.bold });
               let out = '', at = 0;
               for (const region of regions.filter(r => r.y === y && r.width > 0)) {
@@ -245,7 +252,7 @@ export default async function (pi: ExtensionAPI) {
             else if (matchesKey(data, Key.tab) || matchesKey(data, Key.right)) moveFocus();
             else if (matchesKey(data, Key.up)) { scroll = Math.max(0, scroll - 1); tui.requestRender(); }
             else if (matchesKey(data, Key.down)) { scroll = Math.min(maxScroll, scroll + 1); tui.requestRender(); }
-            else if (matchesKey(data, Key.enter)) { if (focused === undefined) done(); else if (focused === REFRESH) refreshStatus(); else remove(focused); }
+            else if (matchesKey(data, Key.enter)) activate(focused);
           },
           handleMouse(event) {
             if (event.type === 'wheel') {
@@ -255,7 +262,7 @@ export default async function (pi: ExtensionAPI) {
             if (event.type !== 'click' || event.button !== 'left') return;
             const hit = regions.find(r => r.y === event.y && event.x >= r.x && event.x < r.x + r.width);
             if (!hit) return;
-            if (hit.label === undefined) done(); else if (hit.label === REFRESH) refreshStatus(); else remove(hit.label);
+            activate(hit.label);
             return { handled: true };
           },
         }, theme);
