@@ -276,8 +276,7 @@ export default async function (pi: ExtensionAPI) {
               if (heading !== section) {
                 // Gaps grow with the hierarchy: none inside a pill, one between pills, two between sections.
                 if (section) rows.push(text(''));
-                const count = ordered().filter(p => !!ticketOf(p) === !!ticket).length;
-                rows.push(text(`${heading.toUpperCase()} · ${count}`, muted), text(''));
+                rows.push(text(heading.toUpperCase(), muted), text(''));
                 section = heading;
               }
               starts.set(pill.label, rows.length);
