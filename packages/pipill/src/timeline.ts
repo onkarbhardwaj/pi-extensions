@@ -109,7 +109,11 @@ export function runSummarizer(input: string, config: TimelineConfig, track?: (ch
       settled = true; clearTimeout(timer); track?.(undefined);
       if (error) reject(error); else resolve(stdout);
     };
-    const timer = setTimeout(() => { child.kill('SIGKILL'); finish(new Error(`model timed out after ${config.timeoutSeconds} s`)); }, config.timeoutSeconds * 1000);
+    const timer = setTimeout(() => {
+      // Close our ends of the pipes too, so a grandchild holding them cannot keep anything alive.
+      try { child.kill('SIGKILL'); child.stdin?.destroy(); child.stdout?.destroy(); child.stderr?.destroy(); } catch {}
+      finish(new Error(`model timed out after ${config.timeoutSeconds} s`));
+    }, config.timeoutSeconds * 1000);
     child.stdout?.on('data', chunk => { if (stdout.length < 1_000_000) stdout += chunk; });
     child.stderr?.on('data', chunk => { if (stderr.length < 10_000) stderr += chunk; });
     child.on('error', error => finish(error));

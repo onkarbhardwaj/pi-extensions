@@ -64,7 +64,7 @@ test('the summarizer process is stopped at the time limit and failures reject', 
   process.env.PATH = `${dir}:${path}`;
   await writeFile(fake, '#!/bin/sh\ncat >/dev/null\necho \'{"alpha": "done"}\'\n'); await chmod(fake, 0o755);
   assert.match(await runSummarizer('input', { ...DEFAULT_TIMELINE, timeoutSeconds: 5 }), /"alpha": "done"/);
-  await writeFile(fake, '#!/bin/sh\nsleep 30\n');
+  await writeFile(fake, '#!/bin/sh\nexec sleep 30\n');
   const started = Date.now();
   await assert.rejects(runSummarizer('input', { ...DEFAULT_TIMELINE, timeoutSeconds: 5 }), /timed out after 5 s/);
   assert.ok(Date.now() - started < 8000);
