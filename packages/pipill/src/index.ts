@@ -21,6 +21,11 @@ export default async function (pi: ExtensionAPI) {
   let stateError: string | undefined;
   let panelOpen = false;
   let sessionContext: ExtensionContext | undefined;
+  // Pi passes a fresh context object to every event, so compare sessions, not objects.
+  const isCurrent = (ctx: ExtensionContext) => {
+    try { return !!sessionContext && sessionContext.sessionManager.getSessionId() === ctx.sessionManager.getSessionId(); }
+    catch { return false; }
+  };
   let timelineState: TimelineState = { timelines: {} };
   let timelineError: string | undefined;
   let timelineRedraw: (() => void) | undefined;
@@ -44,7 +49,7 @@ export default async function (pi: ExtensionAPI) {
    * the cursor stays put so the next run covers the same messages, and retries back off.
    */
   async function updateTimeline(ctx: ExtensionContext) {
-    if (!timeline.enabled || timelineRunning || Date.now() < timelineRetryAt || sessionContext !== ctx || !pills.length) return;
+    if (!timeline.enabled || timelineRunning || Date.now() < timelineRetryAt || !isCurrent(ctx) || !pills.length) return;
     timelineRunning = true;
     try {
       const current = restoreTimeline(ctx.sessionManager.getEntries());
@@ -52,7 +57,7 @@ export default async function (pi: ExtensionAPI) {
       if (batch.count < timeline.minMessages) return;
       const labels = pills.map(pill => pill.label);
       const output = await runSummarizer(buildInput(pills, current, batch.messages), timeline, child => { timelineChild = child; });
-      if (sessionContext !== ctx) return;
+      if (!isCurrent(ctx)) return;
       saveTimeline(applyUpdates(restoreTimeline(ctx.sessionManager.getEntries()), parseUpdates(output, labels), batch.lastId));
       timelineFailures = 0; timelineRetryAt = 0; timelineError = undefined;
     } catch (error) {
@@ -75,7 +80,7 @@ export default async function (pi: ExtensionAPI) {
   async function pollTickets(ctx: ExtensionContext) {
     if (pollTimer) clearTimeout(pollTimer);
     pollTimer = undefined;
-    if (polling || sessionContext !== ctx) return;
+    if (polling || !isCurrent(ctx)) return;
     polling = true;
     try {
       const tickets = [...new Set(pills.map(ticketOf).filter(Boolean))] as string[];
@@ -91,7 +96,7 @@ export default async function (pi: ExtensionAPI) {
           if (!targets.length) next = { prs: [], error: 'No GitHub repository found for this directory.', checkedAt: Date.now() };
           else if (errors.length === targets.length) next = { prs: statuses.get(ticket)?.prs ?? [], error: errors.join('; '), checkedAt: Date.now() };
           else next = { ...summarize(found), error: errors.length ? errors.join('; ') : undefined };
-          if (sessionContext !== ctx) return;
+          if (!isCurrent(ctx)) return;
           for (const message of notableChanges(ticket, statuses.get(ticket), next)) ctx.ui.notify(message, 'warning');
           statuses.set(ticket, next);
         }
@@ -99,14 +104,14 @@ export default async function (pi: ExtensionAPI) {
       }
     } finally {
       polling = false;
-      if (sessionContext === ctx) pollTimer = setTimeout(() => void pollTickets(ctx), POLL_MS);
+      if (isCurrent(ctx)) pollTimer = setTimeout(() => void pollTickets(ctx), POLL_MS);
     }
   }
 
   async function addBranchTicket(ctx: ExtensionContext) {
     const branch = await currentBranch(ctx.cwd);
     const ticket = branch && ticketIds(branch, ticketPrefixes)[0];
-    if (!ticket || sessionContext !== ctx || stateError) return;
+    if (!ticket || !isCurrent(ctx) || stateError) return;
     if (pills.some(pill => ticketOf(pill) === ticket)) return;
     try { mutate(ctx, { action: 'add', pill: { label: ticket, title: `Current branch: ${branch}` } }, false); } catch {}
   }
@@ -282,15 +287,16 @@ export default async function (pi: ExtensionAPI) {
               starts.set(pill.label, rows.length);
               const updates = history(pill.label), open = expanded.has(pill.label);
               rows.push({ parts: [
-                ...(updates.length ? [{ text: open ? '⊟' : '⊞', style: accent, target: TOGGLE + pill.label }, { text: ' ' }] : []),
+                ...(updates.length ? [{ text: open ? '-' : '+', style: accent, target: TOGGLE + pill.label }, { text: ' ' }] : []),
                 { text: pillHeading(pill.label, ticket, status), style: { fg: 'mdHeading', bold: true } }] });
               markdown(pillBodyMarkdown(pill));
               // Newest first: dots joined by a vertical line; the oldest shown entry is hollow.
-              const shown = open ? [...updates].reverse() : updates.slice(-1);
+              // Hidden until expanded; then newest first, dots joined by a line, the oldest hollow.
+              const shown = open ? [...updates].reverse() : [];
               shown.forEach((update, i) => {
-                const last = i === shown.length - 1, dot = last && open && shown.length > 1 ? '○' : '●';
+                const last = i === shown.length - 1, dot = last && shown.length > 1 ? '○' : '●';
                 wrapTextWithAnsi(update, Math.max(1, contentWidth - 5)).forEach((line, j) => rows.push({ parts: [
-                  { text: j === 0 ? `  ${dot}  ` : `  ${open && !last ? '│' : ' '}  `, style: muted }, { text: line }] }));
+                  { text: j === 0 ? `  ${dot}  ` : `  ${!last ? '│' : ' '}  `, style: muted }, { text: line }] }));
               });
               if (ticket) markdown(prListMarkdown(status, new Set(status?.prs.map(pr => pr.repo)).size > 1 || repos.length > 1));
               rows.push(buttons([
