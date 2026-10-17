@@ -13,7 +13,7 @@ test('agent_settled with a fresh context object for the same session writes a ti
   process.env.PI_CODING_AGENT_DIR = dir;
   process.env.PATH = `${dir}:${saved.path}`;
   await writeFile(join(dir, 'pipill.json'), JSON.stringify({ timeline: { enabled: true, minMessages: 2, timeoutSeconds: 10 } }));
-  await writeFile(join(dir, 'pi'), '#!/bin/sh\ncat >/dev/null\necho \'{"alpha": "Shipped the first draft."}\'\n');
+  await writeFile(join(dir, 'pi'), '#!/bin/sh\ncat >/dev/null\necho \'{"updates": {"alpha": "Shipped the first draft."}, "recent": [{"text": "Drafted alpha.", "topic": "alpha"}]}\'\n');
   await chmod(join(dir, 'pi'), 0o755);
 
   const { default: extension } = await import('../src/index.ts');
@@ -32,6 +32,7 @@ test('agent_settled with a fresh context object for the same session writes a ti
   handlers.agent_settled({}, context());
   for (let i = 0; i < 50 && !entries.some(e => e.customType === 'pi-pill-timeline'); i++) await new Promise(r => setTimeout(r, 100));
   const timeline = entries.findLast(e => e.customType === 'pi-pill-timeline');
-  assert.deepEqual(timeline?.data, { version: 1, cursor: 'm2', timelines: { alpha: ['Shipped the first draft.'] } });
+  assert.deepEqual(timeline?.data, { version: 1, cursor: 'm2', timelines: { alpha: ['Shipped the first draft.'] },
+    recent: [{ text: 'Drafted alpha.', topic: 'alpha' }], dismissed: [] });
   handlers.session_shutdown?.({}, context());
 });

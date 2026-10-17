@@ -12,8 +12,8 @@ test('missing configuration uses neutral defaults; personal prefixes normalize o
   t.after(() => rm(dir, { recursive: true, force: true }));
   const path = join(dir, 'pipill.json');
   assert.deepEqual(await loadConfig(path), { ticketPrefixes: [], repos: [], ci: {}, timeline: DEFAULT_TIMELINE });
-  await writeFile(path, JSON.stringify({ ticketPrefixes: ['proj', 'OPS', 'PROJ'], ci: { 'Org/Repo': { ignore: ['Kodiak'] } } }));
-  assert.deepEqual(await loadConfig(path), { ticketPrefixes: ['PROJ', 'OPS'], repos: [], ci: { 'org/repo': { ignore: ['Kodiak'] } }, timeline: DEFAULT_TIMELINE });
+  await writeFile(path, JSON.stringify({ ticketPrefixes: ['proj', 'OPS', 'PROJ'], ci: { 'Org/Repo': { ignore: ['advisory-bot'] } } }));
+  assert.deepEqual(await loadConfig(path), { ticketPrefixes: ['PROJ', 'OPS'], repos: [], ci: { 'org/repo': { ignore: ['advisory-bot'] } }, timeline: DEFAULT_TIMELINE });
 });
 
 test('invalid configuration is reported instead of replacing the user policy', async t => {
