@@ -118,7 +118,7 @@ Each pill can keep a short timeline of updates, written in the background. Turn 
 After a turn settles and at least `minMessages` (default 6) new user or assistant messages exist,
 pipill runs one separate Pi process with no session, extensions, tools, skills, or MCP servers.
 It sends the new message text, each pill's label, title, description, and its last three updates,
-and asks for a one-sentence headline (about 15 words, at most 120 characters) per pill whose subject moved forward, or nothing.
+and asks for a commit-message style update (one to three terse fragments, at most 120 characters) per pill whose subject moved forward, or nothing.
 The user never waits for it.
 
 - The run is stopped after `timeoutSeconds` (default 20).
