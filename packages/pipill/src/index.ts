@@ -7,7 +7,7 @@ import { Key, Markdown, matchesKey, visibleWidth, truncateToWidth, sliceByColumn
 import { Type } from 'typebox';
 import { frame } from './frame.ts';
 import { STATE_TYPE, parseArgs, toolCommand, restore, change, layout, ticketIds } from './core.ts';
-import { type TicketPr, type TicketStatus, currentBranch, currentRepo, fetchTicketPrs, notableChanges, repoKey, summarize } from './tickets.ts';
+import { type TicketPr, type TicketStatus, currentBranch, currentRepo, fetchTicketPrs, icons, notableChanges, repoKey, summarize } from './tickets.ts';
 import { pillMarkdown } from './panel-markdown.ts';
 
 type Pill = { label: string; title?: string; description?: string };
