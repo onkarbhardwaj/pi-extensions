@@ -247,7 +247,17 @@ export default async function (pi: ExtensionAPI) {
               const clipped = truncateToWidth(text, Math.max(0, columns));
               return theme.style(clipped + ' '.repeat(Math.max(0, columns - visibleWidth(clipped))), { fg, bg, ...options });
             };
-            const lines: string[] = [paint(showReminders ? 'Reminders' : 'Heartbeats', width, { bold: true }), paint('')];
+            // A row of differently styled segments, padded to the panel width; all colours are Pi theme tokens.
+            const segments = (parts: [string, any?][]) => {
+              let used = 0, row = '';
+              for (const [text, options] of parts) {
+                const clipped = truncateToWidth(text, Math.max(0, width - used));
+                row += theme.style(clipped, { fg, bg, ...options }); used += visibleWidth(clipped);
+              }
+              return row + theme.style(' '.repeat(Math.max(0, width - used)), { fg, bg });
+            };
+            const heading = { fg: 'mdHeading', bold: true }, muted = { fg: 'muted' };
+            const lines: string[] = [paint(showReminders ? 'Reminders' : 'Heartbeats', width, heading), paint('')];
             regions = [];
             let index = 0;
             const buttonRow = (buttons: [string, string, string][], suffix = '') => {
@@ -269,23 +279,27 @@ export default async function (pi: ExtensionAPI) {
               }
               lines.push(row + theme.style(sliceByColumn(padded, at, Math.max(0, width - at)), { fg, bg }));
             };
-            if (showReminders && !reminders.length) lines.push(paint('No reminders', width, { fg: 'muted' }), paint(''));
-            if (showHeartbeats && !heartbeats.length) lines.push(paint('No heartbeats', width, { fg: 'muted' }), paint(''));
+            if (showReminders && !reminders.length) lines.push(paint('No reminders', width, muted), paint(''));
+            if (showHeartbeats && !heartbeats.length) lines.push(paint('No heartbeats', width, muted), paint(''));
             for (const reminder of showReminders ? reminders : []) {
-              lines.push(paint(`Reminder: ${reminder.text}`));
+              lines.push(segments([['Reminder: ', muted], [reminder.text, heading]]));
               const state = reminder.status === 'scheduled' ? 'Scheduled' : reminder.status === 'due' ? 'Due' : 'Missed';
-              lines.push(paint(`${state} · ${new Date(reminder.dueAt).toLocaleString()}`));
+              const tone = reminder.status === 'due' ? { fg: 'warning', bold: true } : reminder.status === 'missed' ? { fg: 'error' } : muted;
+              lines.push(segments([[state, tone], [` · ${new Date(reminder.dueAt).toLocaleString()}`, muted]]));
               buttonRow([['Dismiss', 'dismiss', reminder.id], ['Snooze', 'snooze', reminder.id]]);
               lines.push(paint(''));
             }
             for (const heartbeat of showHeartbeats ? heartbeats : []) {
-              const label = `Heartbeat: ${heartbeat.name}`;
-              regions.push({ x: 0, y: lines.length, width: visibleWidth(label), id: heartbeat.id, action: 'expand', index });
-              lines.push(paint(label, width, index++ === selected ? { bg: selectedBg, bold: true } : {}));
-              lines.push(paint(heartbeatSummary(heartbeat)));
+              const name = `Heartbeat: ${heartbeat.name}`;
+              regions.push({ x: 0, y: lines.length, width: visibleWidth(name), id: heartbeat.id, action: 'expand', index });
+              const focusedName = index++ === selected ? { bg: selectedBg } : {};
+              lines.push(segments([['Heartbeat: ', { ...muted, ...focusedName }], [heartbeat.name, { ...heading, ...focusedName }]]));
+              const [status, ...rest] = heartbeatSummary(heartbeat).split(' · ');
+              const tone = heartbeat.status === 'active' ? { fg: 'success' } : heartbeat.status === 'expired' ? { fg: 'error' } : muted;
+              lines.push(segments([[status, tone], [rest.length ? ' · ' + rest.join(' · ') : '', muted]]));
               if (expanded.has(heartbeat.id)) {
-                for (const line of heartbeat.prompt.split('\n')) lines.push(paint(line, width, { fg: 'muted' }));
-                if (heartbeat.lastResult) lines.push(paint(`Last result: ${heartbeat.lastResult}`, width, { fg: 'muted' }));
+                for (const line of heartbeat.prompt.split('\n')) lines.push(paint(line, width));
+                if (heartbeat.lastResult) lines.push(segments([['Last result: ', muted], [heartbeat.lastResult, {}]]));
               }
               buttonRow([
                 ...(heartbeat.status === 'expired' ? [] : [[heartbeat.status === 'paused' ? 'Resume' : 'Pause', heartbeat.status === 'paused' ? 'resume' : 'pause', heartbeat.id] as [string, string, string]]),
@@ -294,7 +308,7 @@ export default async function (pi: ExtensionAPI) {
               lines.push(paint(''));
             }
             buttonRow([['Close', 'close', '']]);
-            lines.push(paint('Tab/arrows: choose · Enter: select · Esc: close', width, { fg: 'muted' }));
+            lines.push(paint('Tab/arrows: choose · Enter: select · Esc: close', width, muted));
             return lines;
           },
           handleInput(data) {
