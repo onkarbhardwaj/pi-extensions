@@ -21,8 +21,9 @@ export default function referenceWidget(pi: ExtensionAPI) {
         invalidate() { regions = []; },
         render(width: number) {
           if (width < 1) return [];
-          const accent = (text: string) => theme.fg('accent', stripVTControlCharacters(text));
-          regions = []; let line = accent(truncateToWidth('[+]', width));
+          // The link colour sets references apart from pills, which use the accent colour.
+          const link = (text: string) => theme.fg('mdLink', stripVTControlCharacters(text));
+          regions = []; let line = link(truncateToWidth('[+]', width));
           regions.push({ x: 0, width: visibleWidth(line), add: true });
           const names = labels(paths);
           for (let i = 0; i < paths.length; i++) {
@@ -30,11 +31,11 @@ export default function referenceWidget(pi: ExtensionAPI) {
             const available = width - visibleWidth(line) - reserve - 1;
             if (available < 7) {
               const tail = truncateToWidth(` [+${paths.length - i}]`, Math.max(0, width - visibleWidth(line)));
-              regions.push({ x: visibleWidth(line), width: visibleWidth(tail) });line += accent(tail);break;
+              regions.push({ x: visibleWidth(line), width: visibleWidth(tail) });line += link(tail);break;
             }
             const label = truncateToWidth(names[i], Math.min(26, available - 4));
             const pill = ` [${label}]`;
-            regions.push({ x: visibleWidth(line), width: visibleWidth(pill), path: paths[i] });line += accent(pill);
+            regions.push({ x: visibleWidth(line), width: visibleWidth(pill), path: paths[i] });line += link(pill);
           }
           return [line];
         },
