@@ -66,6 +66,31 @@ Click the top-right Search field or press `/` while viewing. The focused field h
 
 Search covers rendered Markdown text, including off-screen rows, not Markdown syntax or saved comments. Matches are recalculated after resizing or refreshing. Switching files leaves search mode; a new search applies to the newly selected file. Search navigation does not change the annotation selection. While entering a comment or file path, `/`, `n` and `p` are ordinary input.
 
+## Edit Markdown
+
+```text
+/md notes/plan.md
+```
+
+Opens a Markdown file in an editor beside a live preview, using the reader's frame and
+colours. A missing file opens empty and is created when you save; its folder must exist.
+Nothing is sent to the model.
+
+- **Split** shows the editor and preview side by side; **Edit** and **Preview** show one
+  pane. Panels narrower than 100 columns start in Edit.
+- The preview refreshes at most every 150 ms while you type and follows the cursor's
+  position in the document.
+- Editing keys follow Pi's editor keybindings. Enter inserts a newline, Ctrl+Z (or Pi's
+  undo key) undoes and Ctrl+Shift+Z redoes. Click to place the cursor; the wheel scrolls.
+- Tab moves between the editor and the buttons. **Save** writes the file; Esc closes and
+  asks for a second Esc when there are unsaved changes.
+- Saving writes a flushed temporary file in the system temp folder and renames it onto the
+  document, so a crash never leaves a half-written file. It keeps line endings and
+  permissions and writes through symlinks. Files on another volume than the temp folder
+  (external drives, network shares) are refused. If the file changed on disk since it was opened, the first
+  Save warns and a second Save overwrites it. Files over 2 MB or with binary content are
+  refused.
+
 ## Test
 
 Run `npm test` from the repository root or this package. Tests cover path resolution, session restoration, missing/invalid files, displayed-excerpt capture, duplicate basenames and Mermaid width behavior.
