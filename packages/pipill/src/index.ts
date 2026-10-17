@@ -3,21 +3,66 @@ import { join } from 'node:path';
 import { loadConfig } from './config.ts';
 import { reminderContext, toolDescription } from './guidance.ts';
 import { hasRecentReminder } from './reminder.ts';
-import { Key, Markdown, matchesKey, visibleWidth, truncateToWidth, sliceByColumn } from '@earendil-works/pi-tui';
+import { Key, Markdown, matchesKey, visibleWidth, truncateToWidth, sliceByColumn, wrapTextWithAnsi } from '@earendil-works/pi-tui';
 import { Type } from 'typebox';
 import { frame } from './frame.ts';
 import { STATE_TYPE, parseArgs, toolCommand, restore, change, layout, ticketIds } from './core.ts';
 import { type TicketPr, type TicketStatus, currentBranch, currentRepo, fetchTicketPrs, icons, notableChanges, repoKey, summarize } from './tickets.ts';
-import { pillMarkdown } from './panel-markdown.ts';
+import { pillBodyMarkdown, pillHeading, prListMarkdown } from './panel-markdown.ts';
+import { type TimelineState, TIMELINE_STATE_TYPE, applyUpdates, backoffMs, buildInput, newMessages, parseUpdates, restoreTimeline, runSummarizer } from './timeline.ts';
+import type { ChildProcess } from 'node:child_process';
 
 type Pill = { label: string; title?: string; description?: string };
 
 export default async function (pi: ExtensionAPI) {
-  const { ticketPrefixes, repos, ci } = await loadConfig(join(getAgentDir(), 'pipill.json'));
+  const { ticketPrefixes, repos, ci, timeline } = await loadConfig(join(getAgentDir(), 'pipill.json'));
   let pills: Pill[] = [];
   let stateError: string | undefined;
   let panelOpen = false;
   let sessionContext: ExtensionContext | undefined;
+  let timelineState: TimelineState = { timelines: {} };
+  let timelineError: string | undefined;
+  let timelineRedraw: (() => void) | undefined;
+  let timelineRunning = false, timelineFailures = 0, timelineRetryAt = 0;
+  let timelineChild: ChildProcess | undefined;
+
+  const saveTimeline = (state: TimelineState) => {
+    timelineState = state;
+    pi.appendEntry(TIMELINE_STATE_TYPE, { version: 1, ...state });
+  };
+
+  function deleteTimeline(label: string) {
+    const timelines = { ...timelineState.timelines };
+    delete timelines[label];
+    saveTimeline({ ...timelineState, timelines });
+  }
+
+  /**
+   * Summarizes new messages into per-pill updates with a separate session-less Pi process, after a
+   * turn settles. It never blocks the user, and no failure escapes: errors are shown in the panel,
+   * the cursor stays put so the next run covers the same messages, and retries back off.
+   */
+  async function updateTimeline(ctx: ExtensionContext) {
+    if (!timeline.enabled || timelineRunning || Date.now() < timelineRetryAt || sessionContext !== ctx || !pills.length) return;
+    timelineRunning = true;
+    try {
+      const current = restoreTimeline(ctx.sessionManager.getEntries());
+      const batch = newMessages(ctx.sessionManager.getBranch(), current.cursor);
+      if (batch.count < timeline.minMessages) return;
+      const labels = pills.map(pill => pill.label);
+      const output = await runSummarizer(buildInput(pills, current, batch.messages), timeline, child => { timelineChild = child; });
+      if (sessionContext !== ctx) return;
+      saveTimeline(applyUpdates(restoreTimeline(ctx.sessionManager.getEntries()), parseUpdates(output, labels), batch.lastId));
+      timelineFailures = 0; timelineRetryAt = 0; timelineError = undefined;
+    } catch (error) {
+      timelineFailures++;
+      timelineRetryAt = Date.now() + backoffMs(timelineFailures);
+      timelineError = (error instanceof Error ? error.message : String(error)).slice(0, 200);
+    } finally {
+      timelineRunning = false;
+      try { timelineRedraw?.(); } catch {}
+    }
+  }
   const statuses = new Map<string, TicketStatus>();
   let repo: string | undefined;
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
@@ -115,6 +160,7 @@ export default async function (pi: ExtensionAPI) {
   function refresh(ctx: ExtensionContext) {
     try { pills = restore(ctx.sessionManager.getEntries()); stateError = undefined; }
     catch (e) { pills = []; stateError = String(e); ctx.ui.notify(stateError, 'error'); }
+    try { timelineState = restoreTimeline(ctx.sessionManager.getEntries()); } catch { timelineState = { timelines: {} }; }
     showWidget(ctx);
   }
 
@@ -147,16 +193,21 @@ export default async function (pi: ExtensionAPI) {
         let scroll = 0, maxScroll = 0;
         let initialTarget = label;
         let focused: string | undefined; // Undefined means Close, the safe default.
-        const REFRESH = '\u0000refresh', DIFF = '\u0000diff:';
-        // Rendered Markdown per pill, reused while its source text is unchanged.
+        const REFRESH = '\u0000refresh', DIFF = '\u0000diff:', TOGGLE = '\u0000toggle:', DELETE = '\u0000delete:';
+        // Rendered Markdown per source text, reused while unchanged.
         const rendered = new Map<string, Markdown>();
+        // Timelines always open collapsed; expansion lives only as long as the panel.
+        const expanded = new Set<string>();
+        let confirmDelete: string | undefined;
         const hasTickets = () => pills.some(pill => ticketOf(pill));
+        const history = (label: string) => timelineState.timelines[label] ?? [];
         let refreshing = false;
         const refreshStatus = () => {
           if (refreshing) return;
           refreshing = true; tui.requestRender();
           void pollTickets(ctx).finally(() => { refreshing = false; tui.requestRender(); });
         };
+        timelineRedraw = () => tui.requestRender();
         let revealFocus = false;
         let regions: { label?: string; x: number; y: number; width: number }[] = [];
         const remove = (target: string) => {
@@ -165,85 +216,119 @@ export default async function (pi: ExtensionAPI) {
           tui.requestRender();
         };
         const activate = (target: string | undefined) => {
+          if (target !== undefined && target !== confirmDelete) confirmDelete = undefined;
           if (target === undefined) done();
           else if (target === REFRESH) refreshStatus();
           else if (target.startsWith(DIFF)) { done(); openDiff(ctx, target.slice(DIFF.length)); }
-          else remove(target);
+          else if (target.startsWith(TOGGLE)) {
+            const name = target.slice(TOGGLE.length);
+            if (!expanded.delete(name)) expanded.add(name);
+            tui.requestRender();
+          } else if (target.startsWith(DELETE)) {
+            // Deleting cannot be undone, so it takes a second press.
+            if (confirmDelete !== target) { confirmDelete = target; tui.requestRender(); return; }
+            confirmDelete = undefined;
+            deleteTimeline(target.slice(DELETE.length));
+            expanded.delete(target.slice(DELETE.length));
+            focused = undefined; tui.requestRender();
+          } else remove(target);
         };
         const moveFocus = () => {
-          const choices = [undefined, ...(hasTickets() ? [REFRESH] : []),
-            ...ordered().flatMap(p => ticketOf(p) ? [p.label, DIFF + p.label] : [p.label])];
+          const choices = [undefined, ...(hasTickets() ? [REFRESH] : []), ...ordered().flatMap(p => [
+            ...(history(p.label).length ? [TOGGLE + p.label] : []), p.label,
+            ...(ticketOf(p) ? [DIFF + p.label] : []),
+            ...(expanded.has(p.label) && history(p.label).length ? [DELETE + p.label] : [])])];
           focused = choices[(choices.indexOf(focused) + 1) % choices.length];
           revealFocus = true;
           tui.requestRender();
         };
         return frame({
           invalidate() { regions = []; rendered.clear(); },
+          dispose() { timelineRedraw = undefined; },
           render(width) {
             const w = Math.max(1, width);
             const margin = w >= 8 ? 2 : 0;
             const contentWidth = Math.max(1, w - margin * 2);
-            type Row = { text: string; bold?: boolean; muted?: boolean; styled?: boolean; buttons?: [string, string | undefined][] };
+            // A row is styled parts; parts with a target are clickable and focusable.
+            type Part = { text: string; style?: any; target?: string | null };
+            type Row = { parts: Part[]; styled?: boolean };
+            const muted = { fg: 'muted' }, accent = { fg: 'accent' };
             const rows: Row[] = [];
-            const buttons = (items: [string, string | undefined][]): Row => ({ text: items.map(([label]) => label).join(' · '), buttons: items });
+            const text = (value: string, style: any = {}): Row => ({ parts: [{ text: value, style }] });
+            const buttons = (items: [string, string | null][]): Row => ({
+              parts: items.flatMap(([label, target], i) => [...(i ? [{ text: ' · ', style: muted }] : []), { text: label, style: muted, target }]) });
+            const markdown = (source: string) => {
+              if (!source) return;
+              let view = rendered.get(source);
+              if (!view) { view = new Markdown(source, 0, 0, getMarkdownTheme()); rendered.set(source, view); }
+              used.add(source);
+              rows.push(...view.render(contentWidth).map(line => ({ parts: [{ text: line }], styled: true })));
+            };
             const starts = new Map<string, number>();
             const used = new Set<string>();
             let section: string | undefined;
             for (const pill of ordered()) {
-              const heading = ticketOf(pill) ? 'Tickets' : 'Topics';
-              if (heading !== section) { rows.push({ text: heading, bold: true }); section = heading; }
-              starts.set(pill.label, rows.length);
               const ticket = ticketOf(pill), status = ticket ? statuses.get(ticket) : undefined;
-              const showRepo = new Set(status?.prs.map(pr => pr.repo)).size > 1 || repos.length > 1;
-              const source = pillMarkdown(pill, ticket, status, showRepo);
-              let view = rendered.get(source);
-              if (!view) { view = new Markdown(source, 0, 0, getMarkdownTheme()); rendered.set(source, view); }
-              used.add(source);
-              rows.push(...view.render(contentWidth).map(text => ({ text, styled: true })));
-              rows.push(buttons(ticket ? [['Remove', pill.label], ['Diff', DIFF + pill.label]] : [['Remove', pill.label]]), { text: '' });
+              const heading = ticket ? 'Tickets' : 'Topics';
+              if (heading !== section) { rows.push(text(heading, { bold: true })); section = heading; }
+              starts.set(pill.label, rows.length);
+              const updates = history(pill.label), open = expanded.has(pill.label);
+              rows.push({ parts: [
+                ...(updates.length ? [{ text: open ? '⊟' : '⊞', style: accent, target: TOGGLE + pill.label }, { text: ' ' }] : []),
+                { text: pillHeading(pill.label, ticket, status), style: { fg: 'mdHeading', bold: true } }] });
+              markdown(pillBodyMarkdown(pill));
+              // Newest first: dots joined by a vertical line; the oldest shown entry is hollow.
+              const shown = open ? [...updates].reverse() : updates.slice(-1);
+              shown.forEach((update, i) => {
+                const last = i === shown.length - 1, dot = last && open && shown.length > 1 ? '○' : '●';
+                wrapTextWithAnsi(update, Math.max(1, contentWidth - 5)).forEach((line, j) => rows.push({ parts: [
+                  { text: j === 0 ? `  ${dot}  ` : `  ${open && !last ? '│' : ' '}  `, style: muted }, { text: line }] }));
+              });
+              if (ticket) markdown(prListMarkdown(status, new Set(status?.prs.map(pr => pr.repo)).size > 1 || repos.length > 1));
+              rows.push(buttons([
+                [ticket ? 'Remove ticket' : 'Remove topic', pill.label],
+                ...(ticket ? [['Diff', DIFF + pill.label] as [string, string]] : []),
+                ...(open && updates.length ? [[confirmDelete === DELETE + pill.label ? 'Press again to delete timeline' : 'Delete timeline', DELETE + pill.label] as [string, string]] : []),
+              ]), text(''));
             }
             for (const key of rendered.keys()) if (!used.has(key)) rendered.delete(key);
-            if (!pills.length) rows.push({ text: 'No pills remaining.', muted: true }, { text: '' });
-            const available = Math.max(1, Math.floor(tui.terminal.rows * 0.8) - 6);
+            if (!pills.length) rows.push(text('No pills remaining.', muted), text(''));
+            const extra = timelineError ? 1 : 0;
+            const available = Math.max(1, Math.floor(tui.terminal.rows * 0.8) - 6 - extra);
             maxScroll = Math.max(0, rows.length - available);
             if (initialTarget !== undefined) {
               scroll = starts.get(initialTarget) ?? 0;
               initialTarget = undefined;
             }
             if (revealFocus && focused !== undefined) {
-              const index = rows.findIndex(r => r.buttons?.some(([, target]) => target === focused));
+              const index = rows.findIndex(r => r.parts.some(part => part.target === focused));
               if (index >= 0 && index < scroll) scroll = index;
               else if (index >= scroll + available) scroll = index - available + 1;
             }
             revealFocus = false;
             scroll = Math.max(0, Math.min(scroll, maxScroll));
-            const visible = rows.slice(scroll, scroll + available);
-            const footer: [string, string | undefined][] = [['Close', undefined]];
+            const footer: [string, string | null][] = [['Close', null]];
             if (hasTickets()) footer.push([refreshing ? 'Refreshing…' : 'Refresh', refreshing ? '\u0000busy' : REFRESH]);
-            const display: Row[] = [{ text: '' }, ...visible, buttons(footer),
-              { text: 'Tab: choose · Enter: select · ↑↓/wheel: scroll · Esc: close', muted: true }];
-            regions = [];
-            display.forEach((row, y) => {
-              let x = margin;
-              for (const [label, target] of row.buttons ?? []) {
-                if (target !== '\u0000busy') regions.push({ label: target, x, y, width: Math.min(visibleWidth(label), Math.max(0, margin + contentWidth - x)) });
-                x += visibleWidth(label) + 3;
-              }
-            });
+            const display: Row[] = [text(''), ...rows.slice(scroll, scroll + available), buttons(footer),
+              ...(timelineError ? [text(`⚠ Timeline update failed: ${timelineError}`, { fg: 'warning' })] : []),
+              text('Tab: choose · Enter: select · ↑↓/wheel: scroll · Esc: close', muted)];
             const bg = theme.colors.toolPendingBg, fg = theme.colors.text, selectedBg = theme.colors.userMessageBg;
+            regions = [];
             return display.map((row, y) => {
-              const text = ' '.repeat(margin) + truncateToWidth(row.text, contentWidth);
-              const padded = text + ' '.repeat(Math.max(0, w - visibleWidth(text)));
-              if (row.styled) return theme.style(padded, { bg });
-              if (!row.buttons) return theme.style(padded, { fg: row.muted ? 'muted' : fg, bg, bold: row.bold });
-              let out = '', at = 0;
-              for (const region of regions.filter(r => r.y === y && r.width > 0)) {
-                out += theme.style(sliceByColumn(padded, at, region.x - at), { fg: 'muted', bg });
-                out += theme.style(sliceByColumn(padded, region.x, region.width), region.label === focused
-                  ? { fg, bg: selectedBg, bold: true } : { fg: 'muted', bg });
-                at = region.x + region.width;
+              let out = theme.style(' '.repeat(margin), { bg }), x = margin;
+              for (const part of row.parts) {
+                const room = margin + contentWidth - x;
+                if (room <= 0) break;
+                const clipped = truncateToWidth(part.text, room), size = visibleWidth(clipped);
+                const clickable = part.target !== undefined && part.target !== '\u0000busy';
+                const target = part.target === null ? undefined : part.target;
+                if (clickable) regions.push({ label: target, x, y, width: size });
+                const active = clickable && target === focused;
+                out += row.styled ? theme.style(clipped, { bg })
+                  : theme.style(clipped, { fg, bg, ...part.style, ...(active ? { fg, bg: selectedBg, bold: true } : {}) });
+                x += size;
               }
-              return out + theme.style(sliceByColumn(padded, at, Math.max(0, w - at)), { fg: 'muted', bg });
+              return out + theme.style(' '.repeat(Math.max(0, w - x)), { bg });
             });
           },
           handleInput(data) {
@@ -274,7 +359,12 @@ export default async function (pi: ExtensionAPI) {
     refresh(ctx);
     if (ctx.mode === 'tui') void addBranchTicket(ctx).finally(() => pollTickets(ctx));
   });
-  pi.on('session_shutdown', () => { if (pollTimer) clearTimeout(pollTimer); pollTimer = undefined; sessionContext = undefined; });
+  pi.on('agent_settled', (_event, ctx) => { void updateTimeline(ctx).catch(() => {}); });
+  pi.on('session_shutdown', () => {
+    if (pollTimer) clearTimeout(pollTimer); pollTimer = undefined; sessionContext = undefined;
+    try { timelineChild?.kill('SIGKILL'); } catch {}
+    timelineChild = undefined;
+  });
   pi.events.on('pi-pills:current', (request: any) => {
     if (!sessionContext || request?.sessionId !== sessionContext.sessionManager.getSessionId()) return;
     try {

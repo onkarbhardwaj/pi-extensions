@@ -83,7 +83,7 @@ to two icons and a diff button:
 The panel shows topic pills under **Topics** and ticket pills under **Tickets**; the bar uses the same order.
 Each pill is rendered with Pi's Markdown theme: the label as a heading (ticket pills add the bar's
 status icons), then the title and description as Markdown, then matched PRs as a list with their
-state, links, and failing checks. Ticket pills have **Remove** and **Diff**; **Refresh** checks
+state, links, and failing checks. Buttons say **Remove topic** or **Remove ticket**, and ticket pills add **Diff**. **Refresh** checks
 again immediately. Notifications appear
 when CI starts failing, a review needs attention, or a PR merges.
 
@@ -105,6 +105,32 @@ The tool and prompt context also work without terminal UI; panels require termin
 
 Other extensions may query current labels through the read-only `pi-pills:current`
 event with the current `sessionId`. It returns labels only for the matching active session.
+
+## Timelines
+
+Each pill can keep a short timeline of updates, written in the background. Turn it on in
+`pipill.json`:
+
+```json
+"timeline": { "enabled": true, "provider": "github-copilot", "model": "claude-haiku-5.5" }
+```
+
+After a turn settles and at least `minMessages` (default 6) new user or assistant messages exist,
+pipill runs one separate Pi process with no session, extensions, tools, skills, or MCP servers.
+It sends the new message text, each pill's label, title, description, and its last three updates,
+and asks for one to three short sentences per pill whose subject moved forward, or nothing.
+The user never waits for it.
+
+- The run is stopped after `timeoutSeconds` (default 20).
+- Output must be JSON for known pills. Anything else is discarded and nothing is saved.
+- On failure the panel shows the error, the same messages are covered next time, and retries
+  back off from 2 to 30 minutes.
+- Updates are saved in the session, so they survive resume. Removing a pill keeps its timeline;
+  adding the pill again shows it.
+
+In the panel, a pill with updates shows its latest one. **⊞** expands the full timeline, newest
+first, and **⊟** collapses it. **Delete timeline** appears when expanded and asks for a second
+press. Pill descriptions help the summarizer recognise which messages belong to which pill.
 
 ## Test
 
