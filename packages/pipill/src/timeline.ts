@@ -6,7 +6,7 @@ export const TIMELINE_STATE_TYPE = 'pi-pill-timeline';
 export type TimelineState = { cursor?: string; timelines: Record<string, string[]> };
 export type Excerpt = { role: 'user' | 'assistant'; text: string };
 
-const MESSAGE_CHARS = 2000, TOTAL_CHARS = 40_000, HISTORY = 3, UPDATE_CHARS = 400, MAX_UPDATES = 200;
+const MESSAGE_CHARS = 2000, TOTAL_CHARS = 40_000, HISTORY = 3, UPDATE_CHARS = 200, MAX_UPDATES = 200;
 
 export function restoreTimeline(entries: any[]): TimelineState {
   for (let i = entries.length - 1; i >= 0; i--) {
@@ -52,7 +52,8 @@ export const SYSTEM_PROMPT = `You keep a timeline of short updates for each trac
 Return only a JSON object. Its keys are exactly the given pill labels. Each value is a new update string, or null.
 Write an update when the new messages concern that pill's subject and move it forward: a decision, a result, a change of plan, a blocker, or a next step. Use the label, title, description, and earlier updates to judge what the pill covers.
 Use null when the new messages do not concern that pill, or only repeat what earlier updates already say.
-An update is one to three short, plain sentences. State what happened or changed, not who said what.
+An update is a headline: one plain sentence, two at most, about 25 words. State the single most important change, not who said what.
+Leave out procedure, counts, identifiers, and secondary items. The conversation holds the detail.
 Do not use semicolons. Do not use filler, hedging, or praise. Do not repeat earlier updates.
 Read the pill's earlier updates and continue from them, so the timeline reads smoothly. Only sound abrupt when the work actually changed direction.`;
 
@@ -62,6 +63,20 @@ export function buildInput(pills: { label: string; title?: string; description?:
       earlierUpdates: (state.timelines[pill.label] ?? []).slice(-HISTORY) })),
     newMessages: messages,
   });
+}
+
+/** Keeps whole sentences within the limit; falls back to a word boundary, never cutting mid-word. */
+export function shorten(text: string, limit = UPDATE_CHARS) {
+  if (text.length <= limit) return text;
+  const sentences = text.match(/[^.!?]+[.!?]+(\s|$)/g) ?? [];
+  let kept = '';
+  for (const sentence of sentences) {
+    if ((kept + sentence).trim().length > limit) break;
+    kept += sentence;
+  }
+  if (kept.trim()) return kept.trim();
+  const cut = text.slice(0, limit - 1);
+  return cut.slice(0, Math.max(cut.lastIndexOf(' '), 1)).trimEnd() + '…';
 }
 
 /** Accepts only string updates for known labels; anything malformed is rejected as a whole. */
@@ -76,7 +91,7 @@ export function parseUpdates(output: string, labels: string[]): Record<string, s
     const update = (value as Record<string, unknown>)[label];
     if (typeof update !== 'string') continue;
     const clean = update.replace(/[\x00-\x1f\x7f]+/g, ' ').replace(/\s+/g, ' ').trim();
-    if (clean) updates[label] = clean.length > UPDATE_CHARS ? clean.slice(0, UPDATE_CHARS - 1) + '…' : clean;
+    if (clean) updates[label] = shorten(clean);
   }
   return updates;
 }
