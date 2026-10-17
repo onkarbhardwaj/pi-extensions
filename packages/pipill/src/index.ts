@@ -6,6 +6,7 @@ import { hasRecentReminder } from './reminder.ts';
 import { Key, Markdown, matchesKey, visibleWidth, truncateToWidth, sliceByColumn, wrapTextWithAnsi } from '@earendil-works/pi-tui';
 import { Type } from 'typebox';
 import { frame } from './frame.ts';
+import { pageToward, scrollbar } from './scrollbar.ts';
 import { STATE_TYPE, parseArgs, toolCommand, restore, change, layout, ticketIds } from './core.ts';
 import { type TicketPr, type TicketStatus, currentBranch, currentRepo, fetchTicketPrs, icons, notableChanges, repoKey, summarize } from './tickets.ts';
 import { pillBodyMarkdown, pillHeading, prListMarkdown } from './panel-markdown.ts';
@@ -233,6 +234,7 @@ export default async function (pi: ExtensionAPI) {
         timelineRedraw = () => tui.requestRender();
         let revealFocus = false;
         let regions: { label?: string; x: number; y: number; width: number }[] = [];
+        let track: { x: number; top: number; height: number; total: number } | undefined;
         const remove = (target: string) => {
           mutate(ctx, { action: 'remove', label: target });
           focused = undefined;
@@ -369,6 +371,9 @@ export default async function (pi: ExtensionAPI) {
               text('Tab: choose · Enter: select · ↑↓/wheel: scroll · Esc: close', muted)];
             const bg = theme.colors.toolPendingBg, fg = theme.colors.text, selectedBg = theme.colors.userMessageBg;
             regions = [];
+            // The scrollbar sits in the right margin beside the scrolling rows, only when they overflow.
+            const bar = margin >= 2 ? scrollbar(available, rows.length, scroll) : undefined;
+            track = bar ? { x: w - 2, top: 1, height: available, total: rows.length } : undefined;
             return display.map((row, y) => {
               let out = theme.style(' '.repeat(margin), { bg }), x = margin;
               for (const part of row.parts) {
@@ -383,7 +388,10 @@ export default async function (pi: ExtensionAPI) {
                   : theme.style(clipped, { fg, bg, ...part.style, ...(active ? { fg, bg: selectedBg, bold: true } : {}) });
                 x += size;
               }
-              return out + theme.style(' '.repeat(Math.max(0, w - x)), { bg });
+              const thumb = bar?.[y - 1];
+              if (thumb === undefined) return out + theme.style(' '.repeat(Math.max(0, w - x)), { bg });
+              return out + theme.style(' '.repeat(Math.max(0, w - 2 - x)), { bg })
+                + theme.style(thumb ? '┃' : '│', { fg: thumb ? 'scrollbarThumb' : 'scrollbarTrack', bg }) + theme.style(' ', { bg });
             });
           },
           handleInput(data) {
@@ -399,6 +407,10 @@ export default async function (pi: ExtensionAPI) {
               tui.requestRender(); return { handled: true };
             }
             if (event.type !== 'click' || event.button !== 'left') return;
+            if (track && event.x === track.x && event.y >= track.top && event.y < track.top + track.height) {
+              scroll = pageToward(event.y - track.top, track.height, track.total, scroll);
+              tui.requestRender(); return { handled: true };
+            }
             const hit = regions.find(r => r.y === event.y && event.x >= r.x && event.x < r.x + r.width);
             if (!hit) return;
             activate(hit.label);
