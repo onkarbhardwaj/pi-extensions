@@ -128,8 +128,8 @@ The user never waits for it.
 - Updates are saved in the session, so they survive resume. Removing a pill keeps its timeline;
   adding the pill again shows it.
 
-In the panel, a pill with updates shows its latest one. **⊞** expands the full timeline, newest
-first, and **⊟** collapses it. **Delete timeline** appears when expanded and asks for a second
+In the panel, a pill with updates shows **+** before its title. **+** expands the full timeline,
+newest first, and **-** hides it again. **Delete timeline** appears when expanded and asks for a second
 press. Pill descriptions help the summarizer recognise which messages belong to which pill.
 
 ## Test
