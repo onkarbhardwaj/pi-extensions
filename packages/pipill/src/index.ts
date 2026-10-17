@@ -9,7 +9,7 @@ import { frame } from './frame.ts';
 import { STATE_TYPE, parseArgs, toolCommand, restore, change, layout, ticketIds } from './core.ts';
 import { type TicketPr, type TicketStatus, currentBranch, currentRepo, fetchTicketPrs, icons, notableChanges, repoKey, summarize } from './tickets.ts';
 import { pillBodyMarkdown, pillHeading, prListMarkdown } from './panel-markdown.ts';
-import { type TimelineState, TIMELINE_STATE_TYPE, applyUpdates, backoffMs, buildInput, newMessages, parseUpdates, restoreTimeline, runSummarizer } from './timeline.ts';
+import { type TimelineState, RECENT_SHOWN, TIMELINE_STATE_TYPE, adoptTopic, applyUpdates, backoffMs, buildInput, dismissTopic, newMessages, parseOutput, restoreTimeline, runSummarizer, suggestions } from './timeline.ts';
 import type { ChildProcess } from 'node:child_process';
 import { stripVTControlCharacters } from 'node:util';
 
@@ -26,7 +26,7 @@ export default async function (pi: ExtensionAPI) {
     try { return !!sessionContext && sessionContext.sessionManager.getSessionId() === ctx.sessionManager.getSessionId(); }
     catch { return false; }
   };
-  let timelineState: TimelineState = { timelines: {} };
+  let timelineState: TimelineState = { timelines: {}, recent: [], dismissed: [] };
   let timelineError: string | undefined;
   let timelineRedraw: (() => void) | undefined;
   let timelineRunning = false, timelineFailures = 0, timelineRetryAt = 0;
@@ -43,13 +43,27 @@ export default async function (pi: ExtensionAPI) {
     saveTimeline({ ...timelineState, timelines });
   }
 
+  const ticketOfLabel = (label: string) => ticketIds(label, ticketPrefixes)[0];
+
+  /** Adds a suggested topic as a pill and starts its timeline from the recent entries tagged with it. */
+  function adoptSuggestion(ctx: ExtensionContext, label: string) {
+    const result = mutate(ctx, { action: 'add', pill: { label } }, false);
+    if (result.changed) saveTimeline(adoptTopic(restoreTimeline(ctx.sessionManager.getEntries()), label, ticketOfLabel));
+    else ctx.ui.notify(result.message, 'info');
+  }
+
+  function dismissSuggestion(ctx: ExtensionContext, label: string) {
+    saveTimeline(dismissTopic(restoreTimeline(ctx.sessionManager.getEntries()), label));
+  }
+
   /**
    * Summarizes new messages into per-pill updates with a separate session-less Pi process, after a
    * turn settles. It never blocks the user, and no failure escapes: errors are shown in the panel,
    * the cursor stays put so the next run covers the same messages, and retries back off.
    */
   async function updateTimeline(ctx: ExtensionContext) {
-    if (!timeline.enabled || timelineRunning || Date.now() < timelineRetryAt || !isCurrent(ctx) || !pills.length) return;
+    // Runs without pills too, since Recent covers work that no pill tracks yet.
+    if (!timeline.enabled || timelineRunning || Date.now() < timelineRetryAt || !isCurrent(ctx)) return;
     timelineRunning = true;
     try {
       const current = restoreTimeline(ctx.sessionManager.getEntries());
@@ -58,7 +72,8 @@ export default async function (pi: ExtensionAPI) {
       const labels = pills.map(pill => pill.label);
       const output = await runSummarizer(buildInput(pills, current, batch.messages), timeline, child => { timelineChild = child; });
       if (!isCurrent(ctx)) return;
-      saveTimeline(applyUpdates(restoreTimeline(ctx.sessionManager.getEntries()), parseUpdates(output, labels), batch.lastId));
+      const { updates, recent } = parseOutput(output, labels);
+      saveTimeline(applyUpdates(restoreTimeline(ctx.sessionManager.getEntries()), updates, recent, batch.lastId));
       timelineFailures = 0; timelineRetryAt = 0; timelineError = undefined;
     } catch (error) {
       timelineFailures++;
@@ -166,7 +181,7 @@ export default async function (pi: ExtensionAPI) {
   function refresh(ctx: ExtensionContext) {
     try { pills = restore(ctx.sessionManager.getEntries()); stateError = undefined; }
     catch (e) { pills = []; stateError = String(e); ctx.ui.notify(stateError, 'error'); }
-    try { timelineState = restoreTimeline(ctx.sessionManager.getEntries()); } catch { timelineState = { timelines: {} }; }
+    try { timelineState = restoreTimeline(ctx.sessionManager.getEntries()); } catch { timelineState = { timelines: {}, recent: [], dismissed: [] }; }
     showWidget(ctx);
   }
 
@@ -200,6 +215,8 @@ export default async function (pi: ExtensionAPI) {
         let initialTarget = label;
         let focused: string | undefined; // Undefined means Close, the safe default.
         const REFRESH = '\u0000refresh', DIFF = '\u0000diff:', TOGGLE = '\u0000toggle:', DELETE = '\u0000delete:';
+        const ADD = '\u0000add:', DISMISS = '\u0000dismiss:', RECENT = '\u0000recent';
+        const suggested = () => suggestions(timelineState, pills.map(pill => pill.label), ticketOfLabel);
         // Rendered Markdown per source text, reused while unchanged.
         const rendered = new Map<string, Markdown>();
         // Timelines always open collapsed; expansion lives only as long as the panel.
@@ -237,10 +254,18 @@ export default async function (pi: ExtensionAPI) {
             deleteTimeline(target.slice(DELETE.length));
             expanded.delete(target.slice(DELETE.length));
             focused = undefined; tui.requestRender();
+          } else if (target.startsWith(ADD)) {
+            adoptSuggestion(ctx, target.slice(ADD.length));
+            focused = undefined; tui.requestRender();
+          } else if (target.startsWith(DISMISS)) {
+            dismissSuggestion(ctx, target.slice(DISMISS.length));
+            focused = undefined; tui.requestRender();
           } else remove(target);
         };
         const moveFocus = () => {
-          const choices = [undefined, ...(hasTickets() ? [REFRESH] : []), ...ordered().flatMap(p => [
+          const choices = [undefined, ...(hasTickets() ? [REFRESH] : []),
+            ...(timelineState.recent.length ? [TOGGLE + RECENT] : []), ...suggested().flatMap(label => [ADD + label, DISMISS + label]),
+            ...ordered().flatMap(p => [
             ...(history(p.label).length ? [TOGGLE + p.label] : []), p.label,
             ...(ticketOf(p) ? [DIFF + p.label] : []),
             ...(expanded.has(p.label) && history(p.label).length ? [DELETE + p.label] : [])])];
@@ -275,6 +300,23 @@ export default async function (pi: ExtensionAPI) {
             const starts = new Map<string, number>();
             const used = new Set<string>();
             let section: string | undefined;
+            // Recent work across all subjects: one line collapsed, the last few entries expanded,
+            // then suggested topics that no pill covers yet.
+            const recent = timelineState.recent.slice(-RECENT_SHOWN).reverse(), offers = suggested();
+            if (recent.length || offers.length) {
+              rows.push(text('RECENT', muted), text(''));
+              const open = expanded.has(RECENT), toggle = { text: open ? '-' : '+', style: accent, target: TOGGLE + RECENT };
+              if (recent.length && !open) rows.push({ parts: [toggle, { text: ' ' }, { text: recent[0].text }] });
+              else recent.forEach((entry, i) => {
+                const last = i === recent.length - 1, dot = last && recent.length > 1 ? '○' : '●';
+                wrapTextWithAnsi(entry.text, Math.max(1, contentWidth - 5)).forEach((line, j) => rows.push({ parts: [
+                  ...(i === 0 && j === 0 ? [toggle] : [{ text: ' ' }]),
+                  { text: j === 0 ? ` ${dot}  ` : ` ${!last ? '│' : ' '}  `, style: muted }, { text: line }] }));
+              });
+              for (const label of offers) rows.push({ parts: [{ text: label, style: accent }, { text: '  ' },
+                { text: '+', style: accent, target: ADD + label }, { text: ' ' }, { text: '×', style: muted, target: DISMISS + label }] });
+              section = 'Recent';
+            }
             for (const pill of ordered()) {
               const ticket = ticketOf(pill), status = ticket ? statuses.get(ticket) : undefined;
               const heading = ticket ? 'Tickets' : 'Topics';
@@ -290,7 +332,6 @@ export default async function (pi: ExtensionAPI) {
                 ...(updates.length ? [{ text: open ? '-' : '+', style: accent, target: TOGGLE + pill.label }, { text: ' ' }] : []),
                 { text: pillHeading(pill.label, ticket, status), style: { fg: 'mdHeading', bold: true } }] });
               markdown(pillBodyMarkdown(pill));
-              // Newest first: dots joined by a vertical line; the oldest shown entry is hollow.
               // Hidden until expanded; then newest first, dots joined by a line, the oldest hollow.
               const shown = open ? [...updates].reverse() : [];
               shown.forEach((update, i) => {

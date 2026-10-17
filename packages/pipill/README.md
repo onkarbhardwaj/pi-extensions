@@ -73,7 +73,7 @@ current repository when none are configured. Use `host/owner/repo` for GitHub En
 to two icons and a diff button:
 
 ```text
-[DCAI-2425 font export ❌·❗·🔍]
+[MARG-2425 quicksort pivot ❌·❗·🔍]
 ```
 
 - CI: ⏳ running, ❌ failed, ✅ passed.
@@ -94,7 +94,7 @@ by full check name or by the job name after `: `:
 {
   "ticketPrefixes": ["PROJ"],
   "repos": ["org/repo", "github.example.com/team/service"],
-  "ci": { "org/repo": { "ignore": ["backend-banned-deps", "Kodiak"] } }
+  "ci": { "org/repo": { "ignore": ["legacy-lint", "advisory-bot"] } }
 }
 ```
 
@@ -131,6 +131,22 @@ The user never waits for it.
 In the panel, a pill with updates shows **+** before its title. **+** expands the full timeline,
 newest first, and **-** hides it again. **Delete timeline** appears when expanded and asks for a second
 press. Pill descriptions help the summarizer recognise which messages belong to which pill.
+
+### Recent
+
+The same run also writes up to three **Recent** entries for whatever moved forward, whether or not
+a pill covers it. Each entry is tagged with a topic: an existing pill, a topic used before, or a
+new short label. Ticket IDs start the label. Small talk and quick questions get no topic.
+
+The panel shows **RECENT** first. Collapsed, it is one line with the newest entry. **+** expands the
+last five. Below it, topics that no pill covers yet are suggested, newest first, at most three:
+
+```text
+on-call rotation  + ×
+```
+
+**+** adds the topic as a pill and starts its timeline with the Recent entries tagged with it.
+**×** dismisses the suggestion for good. The last 30 entries are kept for suggestions.
 
 ## Test
 
