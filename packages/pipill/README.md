@@ -73,7 +73,7 @@ current repository when none are configured. Use `host/owner/repo` for GitHub En
 to two icons and a diff button:
 
 ```text
-[DCAI-2425 font export ❌·❗·🔍]
+[MARG-2425 quicksort pivot ❌·❗·🔍]
 ```
 
 - CI: ⏳ running, ❌ failed, ✅ passed.
@@ -94,7 +94,7 @@ by full check name or by the job name after `: `:
 {
   "ticketPrefixes": ["PROJ"],
   "repos": ["org/repo", "github.example.com/team/service"],
-  "ci": { "org/repo": { "ignore": ["backend-banned-deps", "Kodiak"] } }
+  "ci": { "org/repo": { "ignore": ["legacy-lint", "advisory-bot"] } }
 }
 ```
 

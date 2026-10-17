@@ -69,7 +69,7 @@ Every update and recent text reads like a commit message: one to three terse fra
 Good: "Venue fell through. Need a replacement."
 Bad: "Venue fell through; need a replacement."
 Keep numbers that are the result. Leave out numbers and names that only describe the work.
-Good: "Cached font subsets. 400-slide export now 14s."
+Good: "Switched quicksort to median-of-three pivots. 1M-item sort now 0.4s."
 Good: "Switched index to cosine. Recall back to 0.83."
 Good: "Grouped quarter's work for self review."
 Bad: "Reviewed 23 PRs and 11 tickets across 3 groups."
@@ -79,13 +79,13 @@ Bad: "Rebalanced December on-call. Sam and Lee swapped weeks 2 and 4. Arun moved
 updates: write one only when the new messages move that pill's subject forward: a decision, a result, a change of plan, a blocker, or a next step. Judge what a pill covers from its label, title, description, and earlier updates. Otherwise null. Do not repeat earlier updates. Continue from earlier updates so the timeline reads smoothly.
 
 recent: what moved forward in the new messages, across all subjects. Skip small talk.
-Cover every subject that moved forward before giving any subject a second entry. Example: if the messages fix an export bug and also report that an offsite venue fell through, write one entry for each, not two for the export.
+Cover every subject that moved forward before giving any subject a second entry. Example: if the messages speed up a quicksort and also report that an offsite venue fell through, write one entry for each, not two for the quicksort.
 recent.topic: the subject the entry belongs to. Every entry about real work gets a topic. Choose in this order:
 1. An existing pill label that covers the subject.
 2. A label from knownTopics for the same subject. Reuse it exactly.
 3. A new short label of two to four words that names the subject. Example: messages about rebalancing the on-call schedule, with no matching pill or known topic, get topic "on-call rotation".
 When work belongs to a ticket, use the ticket's label, even if the message only mentions the fix.
-Example (MARG is a hypothetical ticket prefix used only for illustration): knownTopics has "MARG-1042 export timeout". New messages say "the font caching PR got approved, merging". Use topic "MARG-1042 export timeout", not "font caching".
+Example (MARG is a hypothetical ticket prefix used only for illustration): knownTopics has "MARG-1042 quicksort slowdown". New messages say "the pivot selection PR got approved, merging". Use topic "MARG-1042 quicksort slowdown", not "pivot selection".
 If a new subject names a ticket ID such as MARG-2207, start the label with it: "MARG-2207 search regression".
 The MARG labels above are illustrations only. Never output a MARG label or invent a ticket ID. Use a ticket ID only when it appears in the pills, knownTopics, or new messages.
 Use null only for small talk or a quick question with no outcome, such as explaining an API difference.`;

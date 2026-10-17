@@ -62,18 +62,18 @@ test('updates append per label, recent keeps the newest 30, and state restores f
 
 test('suggestions are recent topic tags without pills, duplicates, or dismissed labels, newest first, at most three', () => {
   const tag = (topic: string | null) => ({ text: 'x.', topic });
-  const state = { ...empty(), recent: [tag('Old idea'), tag('MARG-1 export'), tag(null), tag('on-call rotation'), tag('Self review'),
-    tag('On-call rotation'), tag('alpha'), tag('MARG-1 export timeout'), tag('Venue search')], dismissed: ['self review'] };
-  assert.deepEqual(suggestions(state, ['alpha'], ticketOf), ['Venue search', 'MARG-1 export timeout', 'On-call rotation']);
+  const state = { ...empty(), recent: [tag('Old idea'), tag('MARG-1 quicksort'), tag(null), tag('on-call rotation'), tag('Self review'),
+    tag('On-call rotation'), tag('alpha'), tag('MARG-1 quicksort slowdown'), tag('Venue search')], dismissed: ['self review'] };
+  assert.deepEqual(suggestions(state, ['alpha'], ticketOf), ['Venue search', 'MARG-1 quicksort slowdown', 'On-call rotation']);
   assert.deepEqual(suggestions(state, ['alpha', 'MARG-1 anything'], ticketOf), ['Venue search', 'On-call rotation', 'Old idea']);
-  assert.deepEqual(suggestions(dismissTopic(state, 'Venue search'), ['alpha'], ticketOf).slice(0, 1), ['MARG-1 export timeout']);
+  assert.deepEqual(suggestions(dismissTopic(state, 'Venue search'), ['alpha'], ticketOf).slice(0, 1), ['MARG-1 quicksort slowdown']);
 });
 
 test('adopting a topic starts its timeline from tagged recent entries, oldest first', () => {
-  const state = { ...empty(), recent: [{ text: 'Found the slow step.', topic: 'MARG-1 export' }, { text: 'Chatted.', topic: null },
-    { text: 'Cached subsets. Export now 14s.', topic: 'MARG-1 export timeout' }, { text: 'Other.', topic: 'beta' }] };
-  assert.deepEqual(adoptTopic(state, 'MARG-1 export timeout', ticketOf).timelines,
-    { 'MARG-1 export timeout': ['Found the slow step.', 'Cached subsets. Export now 14s.'] });
+  const state = { ...empty(), recent: [{ text: 'Found the slow step.', topic: 'MARG-1 quicksort' }, { text: 'Chatted.', topic: null },
+    { text: 'Switched to median-of-three pivots. Sort now 0.4s.', topic: 'MARG-1 quicksort slowdown' }, { text: 'Other.', topic: 'beta' }] };
+  assert.deepEqual(adoptTopic(state, 'MARG-1 quicksort slowdown', ticketOf).timelines,
+    { 'MARG-1 quicksort slowdown': ['Found the slow step.', 'Switched to median-of-three pivots. Sort now 0.4s.'] });
   assert.deepEqual(adoptTopic(state, 'BETA', ticketOf).timelines, { BETA: ['Other.'] });
 });
 
