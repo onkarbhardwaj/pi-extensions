@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { loadConfig } from './config.ts';
 import { reminderContext, toolDescription } from './guidance.ts';
 import { hasRecentReminder } from './reminder.ts';
-import { Key, Markdown, matchesKey, visibleWidth, truncateToWidth, sliceByColumn, rgbColor } from '@earendil-works/pi-tui';
+import { Key, Markdown, matchesKey, visibleWidth, truncateToWidth, sliceByColumn } from '@earendil-works/pi-tui';
 import { Type } from 'typebox';
 import { frame } from './frame.ts';
 import { STATE_TYPE, parseArgs, toolCommand, restore, change, layout, ticketIds } from './core.ts';
@@ -87,8 +87,7 @@ export default async function (pi: ExtensionAPI) {
           const result = layout(ordered(), width, visibleWidth, (s: string, w: number) => truncateToWidth(s, w),
             (pill: Pill) => { const ticket = ticketOf(pill); return ticket ? icons(statuses.get(ticket)) : undefined; });
           regions = result.regions;
-          const dark = theme.appearance !== 'light';
-          const fg = dark ? rgbColor(245, 220, 175) : rgbColor(80, 51, 18);
+          const fg = theme.colors.accent;
           return result.lines.map((line: string, y: number) => {
             let styled = '', column = 0;
             for (const region of result.blocks.filter(r => r.y === y)) {

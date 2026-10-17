@@ -1,5 +1,5 @@
 import { getAgentDir, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { Input, Key, matchesKey, visibleWidth, truncateToWidth, wrapTextWithAnsi, sliceByColumn, rgbColor } from '@earendil-works/pi-tui';
+import { Input, Key, matchesKey, visibleWidth, truncateToWidth, wrapTextWithAnsi, sliceByColumn } from '@earendil-works/pi-tui';
 import { join } from 'node:path';
 import { frame } from './frame.ts';
 import { parseArgs, loadConfig, resolveTarget, snapshot, selectedExcerpt, preparedReview, safeText, diffMatches } from './core.ts';
@@ -167,14 +167,11 @@ export default function (pi: ExtensionAPI) {
                 `${current.status} ${safeText(current.oldPath && current.path && current.oldPath !== current.path ? current.oldPath + ' → ' + current.path : path)} · file comments: ${fileCounts[fileIndex]}`,
                 '',
               ];
-              const dark = theme.appearance !== 'light';
-              const fg = dark ? rgbColor(240, 235, 220) : rgbColor(45, 38, 25);
-              const bg = dark ? rgbColor(45, 43, 38) : rgbColor(243, 239, 228);
-              const addFg = dark ? rgbColor(150, 225, 165) : rgbColor(25, 100, 40);
-              const deleteFg = dark ? rgbColor(255, 165, 165) : rgbColor(145, 35, 35);
-              const selectedBg = dark ? rgbColor(100, 78, 42) : rgbColor(214, 190, 150);
-              const activeBg = dark ? rgbColor(240, 210, 160) : rgbColor(80, 51, 18);
-              const activeFg = dark ? rgbColor(40, 30, 15) : rgbColor(255, 240, 213);
+              // Pi theme colours, as in the reference reader, so theme changes carry over.
+              const fg = theme.colors.text, bg = theme.colors.toolPendingBg;
+              const addFg = theme.colors.toolDiffAdded, deleteFg = theme.colors.toolDiffRemoved;
+              const selectedBg = theme.colors.userMessageBg;
+              const activeBg = theme.colors.accent, activeFg = theme.colors.toolPendingBg;
               const paint = (text, w, options = {}) => {
                 const t = truncateToWidth(text, w); return theme.style(t + ' '.repeat(Math.max(0, w - visibleWidth(t))), { fg, bg, ...options });
               };
