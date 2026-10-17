@@ -59,8 +59,9 @@ No arguments opens the inspection panel. The agent tool supports `list`, `add`, 
 `remove`. Labels are case-sensitive for removal; optional titles and descriptions
 provide more context.
 
-The widget appears below the editor in terminal mode. Click a pill to inspect it;
-use Tab/Enter, Escape, or the mouse in the panel.
+The widget appears below the editor in terminal mode, starting with 📎. Click 📎 or a pill to open the panel;
+use Tab/Enter, Escape, or the mouse in the panel. When the panel content is taller than the
+panel, a scrollbar appears on the right. Clicking its track pages toward the click.
 
 ## Ticket pills
 

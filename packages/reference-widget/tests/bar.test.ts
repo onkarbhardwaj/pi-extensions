@@ -16,7 +16,7 @@ test('truncated reference names and overflow controls retain accent colour', {
   const ctx = {
     mode: 'tui',
     sessionManager: { getEntries: () => [{ type: 'custom', customType: STATE_TYPE, data: {
-      version: 1, paths: ['/access-map-and-account-plan 1.md', '/Marigolds_Alumis_Master_Payer_Table_2026-09-21 1.md'],
+      version: 1, paths: ['/quarterly-planning-notes 1.md', '/Sorting_Benchmarks_Master_Results_2026-09-21 1.md'],
     } }] },
     ui: { setWidget: (_name, factory) => widget = factory({}, {
       fg: (_color, text) => '\x1b[35m' + text + '\x1b[0m',

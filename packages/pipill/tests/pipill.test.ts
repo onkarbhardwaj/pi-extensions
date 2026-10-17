@@ -84,7 +84,7 @@ test('only ticket pills get status icons and a diff target', () => {
   const visibleWidth = s => cells(s).length, truncateToWidth = (s, w) => cells(s).slice(0, Math.max(0, w)).join('');
   const sliceByColumn = (s, x, w) => cells(s).slice(x, x + w).join('');
   const result = layout([{ label: 'topic' }, { label: 'T-1 fix' }], 80, visibleWidth, truncateToWidth, pill => pill.label.startsWith('T-') ? ['❌', '❗'] : undefined);
-  assert.equal(result.lines[0], '[+] [topic] [T-1 fix ❌·❗·🔍]');
+  assert.equal(result.lines[0], ' 📎 [topic] [T-1 fix ❌·❗·🔍]');
   const diff = result.regions.find(region => region.action === 'diff');
   assert.equal(sliceByColumn(result.lines[0], diff.x, diff.width), '🔍');
   assert.equal(result.regions.filter(region => region.action === 'diff').length, 1);
