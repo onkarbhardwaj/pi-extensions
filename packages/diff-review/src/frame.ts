@@ -1,4 +1,4 @@
-import { rgbColor, truncateToWidth, visibleWidth, type Component } from '@earendil-works/pi-tui';
+import { truncateToWidth, visibleWidth, type Component } from '@earendil-works/pi-tui';
 
 // A visual frame only: preserve child focus and translate its mouse coordinates.
 export function frame(child: any, theme: any): Component & { focused?: boolean; dispose?(): void } {
@@ -19,8 +19,7 @@ export function frame(child: any, theme: any): Component & { focused?: boolean; 
       width = columns;
       if (columns < 3) { const lines = child.render(columns); height = lines.length; return lines; }
       const inner = columns - 2;
-      const color = theme.appearance === 'light' ? rgbColor(153, 122, 55) : rgbColor(230, 213, 156);
-      const border = text => theme.style(text, { fg: color });
+      const border = text => theme.style(text, { fg: 'borderAccent' });
       const lines = child.render(inner).map(line => {
         const text = truncateToWidth(line, inner);
         return border('│') + text + ' '.repeat(Math.max(0, inner - visibleWidth(text))) + border('│');
