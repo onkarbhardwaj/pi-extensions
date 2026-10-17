@@ -71,3 +71,16 @@ test('the summarizer process is stopped at the time limit and failures reject', 
   await writeFile(fake, '#!/bin/sh\necho "auth failed" >&2\nexit 2\n');
   await assert.rejects(runSummarizer('input', DEFAULT_TIMELINE), /auth failed/);
 });
+
+test('long updates keep whole sentences within 120 characters and never cut mid-word', async () => {
+  const { shorten } = await import('../src/timeline.ts');
+  const first = 'Regenerated the GitHub token as fine-grained.', second = 'Contents still allows writes.';
+  const long = `${first} ${second} ${'Extra detail follows here. '.repeat(8)}`;
+  const kept = shorten(long);
+  assert.ok(kept.length <= 120 && kept.startsWith(`${first} ${second}`) && kept.endsWith('.'));
+  assert.ok(long.startsWith(kept), 'only whole leading sentences are kept');
+  const run = 'word '.repeat(60).trim();
+  const cut = shorten(run);
+  assert.ok(cut.length <= 120 && cut.endsWith('word…'));
+  assert.equal(shorten('Short.'), 'Short.');
+});
