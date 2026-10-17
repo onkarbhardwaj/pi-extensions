@@ -132,6 +132,22 @@ In the panel, a pill with updates shows **+** before its title. **+** expands th
 newest first, and **-** hides it again. **Delete timeline** appears when expanded and asks for a second
 press. Pill descriptions help the summarizer recognise which messages belong to which pill.
 
+### Recent
+
+The same run also writes up to three **Recent** entries for whatever moved forward, whether or not
+a pill covers it. Each entry is tagged with a topic: an existing pill, a topic used before, or a
+new short label. Ticket IDs start the label. Small talk and quick questions get no topic.
+
+The panel shows **RECENT** first. Collapsed, it is one line with the newest entry. **+** expands the
+last five. Below it, topics that no pill covers yet are suggested, newest first, at most three:
+
+```text
+on-call rotation  + ×
+```
+
+**+** adds the topic as a pill and starts its timeline with the Recent entries tagged with it.
+**×** dismisses the suggestion for good. The last 30 entries are kept for suggestions.
+
 ## Test
 
 From this package: `npm test`. From the repository root: `npm test`.
