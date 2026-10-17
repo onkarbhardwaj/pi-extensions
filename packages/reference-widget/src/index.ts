@@ -5,6 +5,8 @@ import { realpath } from 'node:fs/promises';
 import { stripVTControlCharacters } from 'node:util';
 import { STATE_TYPE, addPath, commandPath, labels, readSnapshot, resolvePath, restore } from './core.ts';
 import { reader } from './reader.ts';
+import { mdPanel } from './md.ts';
+import { openMdFile } from './md-file.ts';
 
 export default function referenceWidget(pi: ExtensionAPI) {
   let paths: string[] = [], opened = false;
@@ -100,6 +102,19 @@ export default function referenceWidget(pi: ExtensionAPI) {
         const path = commandPath(args);
         if (path === undefined) await openReader(ctx);
         else { const result = await mutate('add', path, ctx); ctx.ui.notify(`Reference added: ${labels([result.path])[0]}`, 'info'); }
+      } catch (error) { notifyError(ctx, error); }
+    },
+  });
+  pi.registerCommand('md', {
+    description: 'Edit a Markdown file beside a live preview: /md <path>. A missing file is created when you save.',
+    handler: async (args, ctx) => {
+      try {
+        if (ctx.mode !== 'tui') { ctx.ui.notify('/md requires interactive terminal mode.', 'warning'); return; }
+        const path = commandPath(args);
+        if (!path) { ctx.ui.notify('Usage: /md <path>', 'info'); return; }
+        const file = await openMdFile(resolvePath(path, ctx.cwd));
+        await ctx.ui.custom<void>((tui, theme, _keys, done) => mdPanel(tui, theme, done, file),
+          { overlay: true, overlayOptions: { width: '95%', maxHeight: '90%', anchor: 'center' } });
       } catch (error) { notifyError(ctx, error); }
     },
   });
