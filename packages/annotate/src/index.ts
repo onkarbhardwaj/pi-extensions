@@ -1,5 +1,5 @@
 import { TreeSelectorComponent, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { Input, Key, matchesKey, visibleWidth, truncateToWidth, wrapTextWithAnsi, rgbColor, sliceByColumn } from '@earendil-works/pi-tui';
+import { Input, Key, matchesKey, visibleWidth, truncateToWidth, wrapTextWithAnsi, sliceByColumn } from '@earendil-works/pi-tui';
 import { sourceFromEntry, selectRange, sourceRows, feedback, appendDraft, safeText } from './core.mjs';
 import { frame } from './frame.ts';
 
@@ -102,12 +102,10 @@ export default function (pi: ExtensionAPI) {
             display.push({ text: status });
             display.push({ text: enteringComment ? 'Enter: save · Esc: back' : '↑↓: line · Shift+↑↓/click: range · Tab: control · Enter: choose · Esc: cancel' });
             regions = [];
-            const dark = theme.appearance !== 'light';
-            const bg = dark ? rgbColor(65, 52, 35) : rgbColor(244, 229, 202);
-            const fg = dark ? rgbColor(255, 233, 195) : rgbColor(80, 51, 18);
-            const selectedBg = dark ? rgbColor(105, 80, 45) : rgbColor(215, 193, 158);
-            const activeBg = dark ? rgbColor(245, 220, 175) : rgbColor(80, 51, 18);
-            const activeFg = dark ? rgbColor(50, 35, 18) : rgbColor(255, 240, 213);
+            // Pi theme colours, as in the reference reader, so theme changes carry over.
+            const bg = theme.colors.toolPendingBg, fg = theme.colors.text;
+            const selectedBg = theme.colors.userMessageBg;
+            const activeBg = theme.colors.accent, activeFg = theme.colors.toolPendingBg;
             const range = selectRange(anchor, cursor, source.lines.length);
             return display.map((row, y) => {
               const text = truncateToWidth(row.text, w);

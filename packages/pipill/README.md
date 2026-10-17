@@ -80,7 +80,10 @@ to two icons and a diff button:
 - Review: ❗ changes requested or merge conflict, 👍 approved, 🔀 merged.
 - 🔍 opens diff review for the matched PR's branch, or for a local branch named after the ticket when there is no PR.
 
-The panel shows topic pills under **Topics** and ticket pills under **Tickets**; the bar uses the same order. It lists each matched PR with its state and failing checks. **Refresh** checks
+The panel shows topic pills under **Topics** and ticket pills under **Tickets**; the bar uses the same order.
+Each pill is rendered with Pi's Markdown theme: the label as a heading (ticket pills add the bar's
+status icons), then the title and description as Markdown, then matched PRs as a list with their
+state, links, and failing checks. Ticket pills have **Remove** and **Diff**; **Refresh** checks
 again immediately. Notifications appear
 when CI starts failing, a review needs attention, or a PR merges.
 
