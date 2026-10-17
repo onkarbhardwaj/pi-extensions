@@ -23,8 +23,9 @@ export default function referenceWidget(pi: ExtensionAPI) {
           if (width < 1) return [];
           // The link colour sets references apart from pills, which use the accent colour.
           const link = (text: string) => theme.fg('mdLink', stripVTControlCharacters(text));
-          regions = []; let line = link(truncateToWidth('[+]', width));
-          regions.push({ x: 0, width: visibleWidth(line), add: true });
+          // The bookmark opens the reader; files are added there or with /ref.
+          regions = []; let line = link(truncateToWidth(' 🔖', width));
+          regions.push({ x: 0, width: visibleWidth(line) });
           const names = labels(paths);
           for (let i = 0; i < paths.length; i++) {
             const reserve = i + 1 < paths.length ? visibleWidth(` [+${paths.length - i}]`) : 0;

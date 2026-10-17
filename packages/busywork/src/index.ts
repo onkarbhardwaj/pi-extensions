@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Type } from 'typebox';
 import { Key, matchesKey, sliceByColumn, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 import { frame } from './frame.ts';
+import { pageToward, scrollbar } from './scrollbar.ts';
 import { HEARTBEAT_STATE_TYPE, type Heartbeat, dueHeartbeat, expire, heartbeatStatusText, heartbeatSummary, markRun, nextHeartbeat, parseHeartbeat, parseInterval, restoreHeartbeats, validateName, validatePrompt } from './heartbeats.ts';
 import { STATE_TYPE, type Reminder, describe, markDue, markMissed, nextDue, parseRemind, parseWhen, restore, statusText, validateText } from './core.ts';
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
@@ -220,6 +221,9 @@ export default async function (pi: ExtensionAPI) {
     try {
             await ctx.ui.custom<void>((tui, theme, _keys, done) => {
         let selected = 0, regions: any[] = [];
+        // The body between the title and the Close row scrolls; scroll follows the focused button.
+        let scroll = 0, bodyHeight = 0, bodyTotal = 0, reveal = true;
+        let track: { x: number; top: number } | undefined;
         const actions = () => [
           ...(showReminders ? reminders : []).flatMap(r => [{ id: r.id, action: 'dismiss' }, { id: r.id, action: 'snooze' }]),
           ...(showHeartbeats ? heartbeats : []).flatMap(b => [{ id: b.id, action: 'expand' }, ...(b.status === 'expired' ? [] : [{ id: b.id, action: b.status === 'paused' ? 'resume' : 'pause' }]), { id: b.id, action: 'stop' }]),
@@ -241,7 +245,34 @@ export default async function (pi: ExtensionAPI) {
         };
         return frame({
           invalidate() { regions = []; },
-          render(width) {
+          render(width: number) {
+            // One column is reserved for the scrollbar so content never shifts when it appears.
+            const lines = this.renderAll(Math.max(1, width - 1)), all = regions;
+            const head = 2, foot = 2, bg = theme.colors.toolPendingBg;
+            const room = Math.max(1, Math.floor(tui.terminal.rows * 0.8) - 2 - head - foot);
+            bodyTotal = Math.max(0, lines.length - head - foot);
+            bodyHeight = Math.min(room, bodyTotal);
+            if (reveal) {
+              const at = all.find(r => r.index === selected)?.y;
+              if (at !== undefined && at >= head && at < head + bodyTotal) {
+                if (at - head < scroll) scroll = at - head;
+                else if (at - head >= scroll + bodyHeight) scroll = at - head - bodyHeight + 1;
+              }
+              reveal = false;
+            }
+            scroll = Math.max(0, Math.min(scroll, bodyTotal - bodyHeight));
+            const bar = scrollbar(bodyHeight, bodyTotal, scroll);
+            const shown = [...lines.slice(0, head), ...lines.slice(head + scroll, head + scroll + bodyHeight), ...lines.slice(head + bodyTotal)];
+            regions = all.flatMap(r => r.y < head ? [r] : r.y >= head + bodyTotal ? [{ ...r, y: r.y - bodyTotal + bodyHeight }]
+              : r.y - head >= scroll && r.y - head < scroll + bodyHeight ? [{ ...r, y: r.y - scroll }] : []);
+            track = bar ? { x: width - 1, top: head } : undefined;
+            return shown.map((line, y) => {
+              const thumb = y >= head && y < head + bodyHeight ? bar?.[y - head] : undefined;
+              return line + (thumb === undefined ? theme.style(' ', { bg })
+                : theme.style(thumb ? '\u2503' : '\u2502', { fg: thumb ? 'scrollbarThumb' : 'scrollbarTrack', bg }));
+            });
+          },
+          renderAll(width: number) {
             const bg = theme.colors.toolPendingBg, fg = theme.colors.text, selectedBg = theme.colors.userMessageBg;
             const paint = (text: string, columns = width, options: any = {}) => {
               const clipped = truncateToWidth(text, Math.max(0, columns));
@@ -314,12 +345,19 @@ export default async function (pi: ExtensionAPI) {
           handleInput(data) {
             const count = actions().length;
             if (matchesKey(data, Key.escape)) done();
-            else if (matchesKey(data, Key.tab) || matchesKey(data, Key.right) || matchesKey(data, Key.down)) { selected = (selected + 1) % count; tui.requestRender(); }
-            else if (matchesKey(data, Key.left) || matchesKey(data, Key.up)) { selected = (selected + count - 1) % count; tui.requestRender(); }
+            else if (matchesKey(data, Key.tab) || matchesKey(data, Key.right) || matchesKey(data, Key.down)) { selected = (selected + 1) % count; reveal = true; tui.requestRender(); }
+            else if (matchesKey(data, Key.left) || matchesKey(data, Key.up)) { selected = (selected + count - 1) % count; reveal = true; tui.requestRender(); }
+            else if (matchesKey(data, Key.pageUp) || matchesKey(data, Key.pageDown)) {
+              scroll += (matchesKey(data, Key.pageDown) ? 1 : -1) * Math.max(1, bodyHeight - 1); tui.requestRender();
+            }
             else if (matchesKey(data, Key.enter)) run(actions()[selected]);
           },
           handleMouse(event) {
+            if (event.type === 'wheel') { scroll += event.wheelDelta ?? 0; tui.requestRender(); return { handled: true }; }
             if (event.type !== 'click' || event.button !== 'left') return;
+            if (track && event.x === track.x && event.y >= track.top && event.y < track.top + bodyHeight) {
+              scroll = pageToward(event.y - track.top, bodyHeight, bodyTotal, scroll); tui.requestRender(); return { handled: true };
+            }
             const hit = regions.find(r => r.y === event.y && event.x >= r.x && event.x < r.x + r.width);
             if (!hit) return;
             selected = hit.index; run(hit); return { handled: true };

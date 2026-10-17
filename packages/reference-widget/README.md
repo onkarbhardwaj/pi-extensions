@@ -24,7 +24,7 @@ A path adds a reference without opening the reader. Relative paths resolve again
 
 `/refs` lists registered filenames and full paths without opening the reader or reading file contents. An empty list shows an empty-state message.
 
-With no path, `/ref` opens the reader containing all references. Click any basename in the bar to open the same reader with that file selected; `[+]` asks for a file path. Overflow entries open the full reader. Duplicate basenames have numbered labels, while full paths remain in the stored identities and exported feedback.
+With no path, `/ref` opens the reader containing all references. Click 🔖 to open the reader, or any basename to open it with that file selected. Add files in the reader or with `/ref <path>`. Overflow entries open the full reader. Duplicate basenames have numbered labels, while full paths remain in the stored identities and exported feedback.
 
 The model can manage the same list:
 
