@@ -4,16 +4,16 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs, toolCommand, change, restore, STATE_TYPE, layout } from '../src/core.ts';
-import { parseConfig, loadConfig } from '../src/config.ts';
+import { DEFAULT_TIMELINE, parseConfig, loadConfig } from '../src/config.ts';
 import { reminderContext, toolDescription } from '../src/guidance.ts';
 
 test('missing configuration uses neutral defaults; personal prefixes normalize once', async t => {
   const dir = await mkdtemp(join(tmpdir(), 'pipill-test-'));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const path = join(dir, 'pipill.json');
-  assert.deepEqual(await loadConfig(path), { ticketPrefixes: [], repos: [], ci: {} });
+  assert.deepEqual(await loadConfig(path), { ticketPrefixes: [], repos: [], ci: {}, timeline: DEFAULT_TIMELINE });
   await writeFile(path, JSON.stringify({ ticketPrefixes: ['proj', 'OPS', 'PROJ'], ci: { 'Org/Repo': { ignore: ['Kodiak'] } } }));
-  assert.deepEqual(await loadConfig(path), { ticketPrefixes: ['PROJ', 'OPS'], repos: [], ci: { 'org/repo': { ignore: ['Kodiak'] } } });
+  assert.deepEqual(await loadConfig(path), { ticketPrefixes: ['PROJ', 'OPS'], repos: [], ci: { 'org/repo': { ignore: ['Kodiak'] } }, timeline: DEFAULT_TIMELINE });
 });
 
 test('invalid configuration is reported instead of replacing the user policy', async t => {
