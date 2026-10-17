@@ -6,7 +6,7 @@ export const TIMELINE_STATE_TYPE = 'pi-pill-timeline';
 export type TimelineState = { cursor?: string; timelines: Record<string, string[]> };
 export type Excerpt = { role: 'user' | 'assistant'; text: string };
 
-const MESSAGE_CHARS = 2000, TOTAL_CHARS = 40_000, HISTORY = 3, UPDATE_CHARS = 200, MAX_UPDATES = 200;
+const MESSAGE_CHARS = 2000, TOTAL_CHARS = 40_000, HISTORY = 3, UPDATE_CHARS = 120, MAX_UPDATES = 200;
 
 export function restoreTimeline(entries: any[]): TimelineState {
   for (let i = entries.length - 1; i >= 0; i--) {
@@ -52,8 +52,10 @@ export const SYSTEM_PROMPT = `You keep a timeline of short updates for each trac
 Return only a JSON object. Its keys are exactly the given pill labels. Each value is a new update string, or null.
 Write an update when the new messages concern that pill's subject and move it forward: a decision, a result, a change of plan, a blocker, or a next step. Use the label, title, description, and earlier updates to judge what the pill covers.
 Use null when the new messages do not concern that pill, or only repeat what earlier updates already say.
-An update is a headline: one plain sentence, two at most, about 25 words. State the single most important change, not who said what.
-Leave out procedure, counts, identifiers, and secondary items. The conversation holds the detail.
+An update is a headline: exactly one plain sentence of at most 15 words. State the single most important change, not who said what.
+Leave out reasons, procedure, counts, identifiers, branch names, and secondary items. The conversation holds the detail.
+Good: "Limited timeline updates to a short headline."
+Bad: "Timeline output is now limited to a short headline of one or two sentences, about 200 characters, to stop Haiku from overreaching. The change is committed on a branch."
 Do not use semicolons. Do not use filler, hedging, or praise. Do not repeat earlier updates.
 Read the pill's earlier updates and continue from them, so the timeline reads smoothly. Only sound abrupt when the work actually changed direction.`;
 
