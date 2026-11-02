@@ -1,6 +1,6 @@
 # Running Pi agents in the Herdr app
 
-How we run long-lived Pi agents (Tao, Reporter, Jeeves, Mitchellh, the Avalon reviewer, Venus) in the Herdr desktop app so that each one has a name `hc` can address, keeps its Pi session, and shows up in the app's agents list.
+How to run long-lived Pi agents in the Herdr desktop app so that each one has a name `hc` can address, keeps its Pi session, and shows up in the app's agents list.
 
 Herdr app 0.1.x runs on herdr-core (`hc`). It is not the older Herdr TUI: agents started there don't appear in the app, and the old `herdr` commands don't reach agents in the app.
 
@@ -31,7 +31,7 @@ Pi is the terminal's program, not a shell running Pi. So:
 - `hc send <name>` always reaches the agent, never a shell prompt, and the terminal's status is Pi's own (Pi reports OSC 7501 itself; no extension needed).
 - **Quitting Pi ends the terminal and closes its tab.** To bring the agent back, run the same `hc run` command again with the same `--session`.
 
-The alternative, a named shell with Pi started inside it, keeps the tab after Pi quits, but `hc send <name>` would then type into the shell. We prefer the agent being the terminal.
+The alternative, a named shell with Pi started inside it, keeps the tab after Pi quits, but `hc send <name>` would then type into the shell. The agent being the terminal is usually the better trade.
 
 ## Moving an agent (from the old Herdr TUI, or restarting one)
 
@@ -40,26 +40,19 @@ The alternative, a named shell with Pi started inside it, keeps the tab after Pi
 3. Start it with the command above, in the right space. To open a new space: `herdr-app do space.new --name <name> --folder <folder>`. This also opens a default shell tab, which you can close.
 4. Rename the tab, then check it: `hc get <name>` should show `status: idle`, and `hc read <name> --lines 5` shows Pi's footer with the session name.
 
-## Our agents
+## Example
 
-| Name | Space | Working folder | Session |
-|---|---|---|---|
-| `tao` | main | `~/workspaces` | `01a12c98-f502-71b9-a77b-13542c772e60` |
-| `reporter` | main | `~/workspaces` | `01a1846f-917e-7686-bc54-6dc247f332c1` |
-| `mitchellh` | avalon | `~/workspaces/agentic-avalon-workspace` | `01a09172-2327-7377-8764-f9944b3e110b` |
-| `venus` | venice | `~/workspaces/agentic-venice-workspace` | `01a0a0b9-6dfa-7775-918f-bb89a2181487` |
-| `jeeves` | main | `~/workspaces/jeeves` | `019f4df5-ecec-7d66-8149-6bb2cf1aaf93` |
-| `avalon-reviewer` | avalon | `~/workspaces/agentic-avalon-workspace` | `01a091e1-3d31-72e7-9176-1272cf138ebd` |
-
-Restart one, for example Tao:
+Restart an agent named `planner` in an app space named `work`, resuming its session:
 
 ```sh
-hc run --bg --no-parent --name tao --cwd ~/workspaces \
-  --label herdr.space=$(herdr-app ls | jq -r '.spaces[] | select(.name=="main") | .id') \
-  "$(which pi)" --session 01a12c98-f502-71b9-a77b-13542c772e60
+hc run --bg --no-parent --name planner --cwd ~/projects/app \
+  --label herdr.space=$(herdr-app ls | jq -r '.spaces[] | select(.name=="work") | .id') \
+  "$(which pi)" --session <session id>
 ```
 
 Space names can be renamed in the app at any time, and the lookup above then finds nothing (an empty `herdr.space=` label). Check `herdr-app ls | jq -r '.spaces[] | "\(.name) \(.id)"'` and use the current name or the ID.
+
+Keep your own list of agents (name, space, folder, session ID) outside this repo, so restarting one is a copy and paste.
 
 ## Talking to them
 
