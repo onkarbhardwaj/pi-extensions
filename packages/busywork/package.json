@@ -17,6 +17,8 @@
     "README.md",
     "LICENSE",
     "helpers/meetings.swift",
+    "helpers/Info.plist",
+    "helpers/build.sh",
     "config.example.json"
   ],
   "pi": {

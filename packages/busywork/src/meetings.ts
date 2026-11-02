@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process';
-import { access, readFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Reminder } from './core.ts';
 
@@ -11,6 +13,13 @@ export type MeetingsConfig = { enabled: boolean; command?: string; leadMinutes: 
 const STATUSES: MeetingStatus[] = ['accepted', 'tentative', 'declined', 'invited', 'organizer', 'own', 'unknown'];
 export const DEFAULT_MEETINGS: MeetingsConfig = { enabled: true, leadMinutes: 5, intervalMinutes: 15, statuses: ['accepted', 'tentative', 'organizer', 'invited', 'unknown'] };
 export const DEFAULT_COMMAND = fileURLToPath(new URL('../helpers/bin/meetings', import.meta.url));
+/** Built by helpers/build.sh. Preferred: macOS asks calendar access for this app, not for Pi's host. */
+export const DEFAULT_APP = fileURLToPath(new URL('../helpers/bin/Busywork Meetings.app', import.meta.url));
+
+/** The app bundle when built, else the plain binary. */
+export async function defaultCommand() {
+  return (await commandExists(DEFAULT_APP)) ? DEFAULT_APP : DEFAULT_COMMAND;
+}
 
 export function parseMeetingsConfig(value: unknown): MeetingsConfig {
   if (value === undefined) return { ...DEFAULT_MEETINGS };
@@ -53,17 +62,39 @@ export async function loadBusyworkConfig(path: string): Promise<{ meetings: Meet
 
 export function parseMeetings(stdout: string): Meeting[] {
   const value = JSON.parse(stdout);
+  if (value && typeof value === 'object' && !Array.isArray(value) && typeof value.error === 'string') throw new Error(value.error);
   if (!Array.isArray(value)) throw new Error('Meetings helper must print a JSON array.');
   return value.filter(item => item && typeof item.id === 'string' && typeof item.title === 'string'
     && Number.isFinite(Date.parse(item.start)) && STATUSES.includes(item.status) && typeof item.canceled === 'boolean');
 }
 
 export function runMeetings(command: string): Promise<Meeting[]> {
+  if (command.endsWith('.app')) return runMeetingsApp(command);
   return new Promise((resolve, reject) => execFile(command, ['today', '--json'], { timeout: 30_000, maxBuffer: 4 * 1024 * 1024 },
     (error, stdout, stderr) => {
       if (error) return reject(new Error((stderr || error.message).trim().split('\n')[0]));
       try { resolve(parseMeetings(stdout)); } catch (e) { reject(e); }
     }));
+}
+
+/**
+ * Launches the app bundle through `open`, so it runs as its own app: macOS asks calendar access for it,
+ * not for the terminal or app that started Pi. `open` has no stdout to read, so the result comes back in a file.
+ */
+async function runMeetingsApp(app: string): Promise<Meeting[]> {
+  const folder = await mkdtemp(join(tmpdir(), 'busywork-meetings-'));
+  const out = join(folder, 'meetings.json');
+  try {
+    await new Promise<void>((resolve, reject) => execFile('/usr/bin/open', ['-W', '-g', '-n', app, '--args', 'today', '--json', '--out', out],
+      // The first run waits for the person to answer the calendar prompt.
+      { timeout: 120_000 }, (error, _stdout, stderr) => error ? reject(new Error((stderr || error.message).trim().split('\n')[0])) : resolve()));
+    let result: string;
+    try { result = await readFile(out, 'utf8'); }
+    catch { throw new Error('Meetings helper wrote no result.'); }
+    return parseMeetings(result);
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
 }
 
 export async function commandExists(command: string) {

@@ -34,18 +34,31 @@ State is saved in the session and restored on resume. Schedules run only while t
 
 `helpers/meetings.swift` lists one day's macOS Calendar meetings with your RSVP status
 (accepted, tentative, declined, invited, organizer, own, unknown). Only the source is
-committed; compile it locally:
+committed; build it locally as a small app bundle:
+
+```text
+helpers/build.sh
+```
+
+This makes `helpers/bin/Busywork Meetings.app`. macOS grants calendar access per app, and
+a plain command-line helper inherits whatever app started Pi (a terminal, or an app such as
+Herdr). If that app never asks for calendar access, it can't be granted, and the helper
+fails with "Calendar access denied" without appearing in System Settings. The bundle asks
+for itself instead: the first sync shows a prompt for "Busywork Meetings", after which it
+appears under System Settings → Privacy & Security → Calendars. Rebuilding asks once more,
+because the ad-hoc signature changes.
+
+busywork prefers the bundle when it is built and runs it with `open`. The plain binary still
+works where the terminal already has calendar access:
 
 ```text
 swiftc -O helpers/meetings.swift -o helpers/bin/meetings
-helpers/bin/meetings [today|tomorrow|YYYY-MM-DD] [--json]
+helpers/bin/meetings [today|tomorrow|YYYY-MM-DD] [--json] [--out FILE]
 ```
-
-The first run asks macOS for calendar access for the calling terminal.
 
 ## Meeting reminders
 
-When the helper is compiled, busywork runs it every 15 minutes in terminal mode and adds
+When the helper is built, busywork runs it every 15 minutes in terminal mode and adds
 a reminder 5 minutes before each upcoming meeting you accepted, marked tentative,
 organized, have not answered, or were invited to without being listed individually
 (`unknown`, such as invitations sent to a group). Reminders read `📅 <title> at <time>`;

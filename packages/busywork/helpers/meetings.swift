@@ -1,7 +1,10 @@
 // Lists one day's calendar meetings with your RSVP status, using macOS EventKit.
 //
-// Build: swiftc -O meetings.swift -o bin/meetings
-// Usage: bin/meetings [today|tomorrow|YYYY-MM-DD] [--json]
+// Build: ./build.sh (an app bundle, recommended) or swiftc -O meetings.swift -o bin/meetings
+// Usage: meetings [today|tomorrow|YYYY-MM-DD] [--json] [--out FILE]
+//
+// --out writes the result (or {"error": "..."} on failure) to FILE instead of stdout. The app bundle
+// is launched with `open`, which has no stdout to read, so callers use --out with it.
 //
 // Status values: accepted, tentative, declined, invited (no reply), organizer,
 // own (no attendees), unknown (not listed individually, e.g. a mailing-list invite).
@@ -10,16 +13,41 @@
 import EventKit
 import Foundation
 
+var outPath: String? = nil
+
+func emit(_ text: String) {
+  guard let outPath else { print(text); return }
+  do {
+    // Atomic: the caller never reads a half-written file.
+    try (text + "\n").write(to: URL(fileURLWithPath: outPath), atomically: true, encoding: .utf8)
+  } catch {
+    FileHandle.standardError.write("Cannot write \(outPath): \(error.localizedDescription)\n".data(using: .utf8)!)
+    exit(1)
+  }
+}
+
 func fail(_ message: String) -> Never {
-  FileHandle.standardError.write((message + "\n").data(using: .utf8)!)
+  if outPath != nil,
+     let data = try? JSONSerialization.data(withJSONObject: ["error": message]),
+     let text = String(data: data, encoding: .utf8) {
+    emit(text)
+  } else {
+    FileHandle.standardError.write((message + "\n").data(using: .utf8)!)
+  }
   exit(1)
 }
 
 var dayArgument = "today"
 var json = false
-for argument in CommandLine.arguments.dropFirst() {
+var arguments = Array(CommandLine.arguments.dropFirst())
+while !arguments.isEmpty {
+  let argument = arguments.removeFirst()
   if argument == "--json" { json = true }
-  else if argument == "-h" || argument == "--help" { print("Usage: meetings [today|tomorrow|YYYY-MM-DD] [--json]"); exit(0) }
+  else if argument == "--out" {
+    guard !arguments.isEmpty else { fail("--out needs a file path.") }
+    outPath = arguments.removeFirst()
+  }
+  else if argument == "-h" || argument == "--help" { print("Usage: meetings [today|tomorrow|YYYY-MM-DD] [--json] [--out FILE]"); exit(0) }
   else { dayArgument = argument }
 }
 
@@ -89,12 +117,12 @@ if json {
     ]
   }
   let data = try! JSONSerialization.data(withJSONObject: records, options: [.prettyPrinted, .sortedKeys])
-  print(String(data: data, encoding: .utf8)!)
+  emit(String(data: data, encoding: .utf8)!)
 } else {
   let time = DateFormatter()
   time.dateFormat = "HH:mm"
-  for event in events {
+  emit(events.map { event in
     let canceled = event.status == .canceled ? "CANCELED " : ""
-    print("\(time.string(from: event.startDate))-\(time.string(from: event.endDate))\t\(rsvp(event))\t\(canceled)\(event.title ?? "")")
-  }
+    return "\(time.string(from: event.startDate))-\(time.string(from: event.endDate))\t\(rsvp(event))\t\(canceled)\(event.title ?? "")"
+  }.joined(separator: "\n"))
 }

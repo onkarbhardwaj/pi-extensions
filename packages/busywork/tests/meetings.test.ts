@@ -54,3 +54,7 @@ test('helper output is validated and old dismissals are pruned', () => {
   assert.throws(() => parseMeetings('{}'));
   assert.deepEqual(pruneDismissed([`old@${new Date(now - 2 * 86_400_000).toISOString()}`, meeting().id], now), [meeting().id]);
 });
+
+test('a helper error written as JSON surfaces as its message', () => {
+  assert.throws(() => parseMeetings('{"error":"Calendar access denied."}'), /Calendar access denied\./);
+});

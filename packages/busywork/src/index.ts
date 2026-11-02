@@ -8,7 +8,7 @@ import { HEARTBEAT_STATE_TYPE, type Heartbeat, dueHeartbeat, expire, heartbeatSt
 import { STATE_TYPE, type Reminder, describe, markDue, markMissed, nextDue, parseRemind, parseWhen, restore, statusText, validateText } from './core.ts';
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
 import { join } from 'node:path';
-import { DEFAULT_COMMAND, MEETINGS_STATE_TYPE, commandExists, loadBusyworkConfig, pruneDismissed, restoreDismissed, runMeetings, syncMeetings } from './meetings.ts';
+import { MEETINGS_STATE_TYPE, commandExists, defaultCommand, loadBusyworkConfig, pruneDismissed, restoreDismissed, runMeetings, syncMeetings } from './meetings.ts';
 
 export default async function (pi: ExtensionAPI) {
   const { meetings: meetingsConfig } = await loadBusyworkConfig(join(getAgentDir(), 'busywork.json'));
@@ -200,8 +200,8 @@ export default async function (pi: ExtensionAPI) {
     if (meetingTimer) clearTimeout(meetingTimer);
     meetingTimer = undefined;
     if (!meetingsConfig.enabled || context !== ctx) return;
-    const command = meetingsConfig.command ?? DEFAULT_COMMAND;
     try {
+      const command = meetingsConfig.command ?? await defaultCommand();
       // An uncompiled default helper means meeting sync is not set up; stay quiet about it.
       if (!meetingsConfig.command && !(await commandExists(command))) return;
       const meetings = await runMeetings(command);
