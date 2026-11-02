@@ -44,18 +44,20 @@ The alternative, a named shell with Pi started inside it, keeps the tab after Pi
 
 | Name | Space | Working folder | Session |
 |---|---|---|---|
-| `tao` | workspaces | `~/workspaces` | `01a12c98-f502-71b9-a77b-13542c772e60` |
-| `reporter` | workspaces | `~/workspaces` | `01a1846f-917e-7686-bc54-6dc247f332c1` |
-| `mitchellh` | agentic-avalon-workspace | `~/workspaces/agentic-avalon-workspace` | `01a09172-2327-7377-8764-f9944b3e110b` |
+| `tao` | main | `~/workspaces` | `01a12c98-f502-71b9-a77b-13542c772e60` |
+| `reporter` | main | `~/workspaces` | `01a1846f-917e-7686-bc54-6dc247f332c1` |
+| `mitchellh` | avalon | `~/workspaces/agentic-avalon-workspace` | `01a09172-2327-7377-8764-f9944b3e110b` |
 | `venus` | venice | `~/workspaces/agentic-venice-workspace` | `01a0a0b9-6dfa-7775-918f-bb89a2181487` |
 
 Restart one, for example Tao:
 
 ```sh
 hc run --bg --no-parent --name tao --cwd ~/workspaces \
-  --label herdr.space=$(herdr-app ls | jq -r '.spaces[] | select(.name=="workspaces") | .id') \
+  --label herdr.space=$(herdr-app ls | jq -r '.spaces[] | select(.name=="main") | .id') \
   "$(which pi)" --session 01a12c98-f502-71b9-a77b-13542c772e60
 ```
+
+Space names can be renamed in the app at any time, and the lookup above then finds nothing (an empty `herdr.space=` label). Check `herdr-app ls | jq -r '.spaces[] | "\(.name) \(.id)"'` and use the current name or the ID.
 
 ## Talking to them
 
