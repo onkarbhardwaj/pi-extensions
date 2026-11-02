@@ -6,7 +6,7 @@ Herdr app 0.1.x runs on herdr-core (`hc`). It is not the older Herdr TUI: agents
 
 ## The rule that shapes everything
 
-**An `hc` name can only be set when a terminal starts.** There is no rename. To make an agent addressable as `hc send tao …`, start Pi itself as the terminal's program with `--name`:
+**An `hc` name can only be set when a terminal starts.** There is no rename. To make an agent addressable as `hc send planner …`, start Pi itself as the terminal's program with `--name`:
 
 ```sh
 hc run --bg --no-parent \
