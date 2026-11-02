@@ -1,6 +1,6 @@
 # Running Pi agents in the Herdr app
 
-How we run long-lived Pi agents (Tao, Reporter, Mitchellh, Venus) in the Herdr desktop app so that each one has a name `hc` can address, keeps its Pi session, and shows up in the app's agents list.
+How we run long-lived Pi agents (Tao, Reporter, Jeeves, Mitchellh, the Avalon reviewer, Venus) in the Herdr desktop app so that each one has a name `hc` can address, keeps its Pi session, and shows up in the app's agents list.
 
 Herdr app 0.1.x runs on herdr-core (`hc`). It is not the older Herdr TUI: agents started there don't appear in the app, and the old `herdr` commands don't reach agents in the app.
 
@@ -35,7 +35,7 @@ The alternative, a named shell with Pi started inside it, keeps the tab after Pi
 
 ## Moving an agent (from the old Herdr TUI, or restarting one)
 
-1. **Quit the running Pi first** (`/quit`). Two Pi processes on one session file can fork its history.
+1. **Quit the running Pi first** (`/quit`). Two Pi processes on one session file can fork its history. Before typing `/quit` into an agent's input, check the input box is empty and the agent is idle: text typed after an unsent draft is sent as one prompt.
 2. Find its session: Pi stores sessions under `~/.pi/agent/sessions/<folder>/`, and the session name is in the file's latest `session_info` line. Search with `rg -l '"name":"<name>"' ~/.pi/agent/sessions/*/*.jsonl`.
 3. Start it with the command above, in the right space. To open a new space: `herdr-app do space.new --name <name> --folder <folder>`. This also opens a default shell tab, which you can close.
 4. Rename the tab, then check it: `hc get <name>` should show `status: idle`, and `hc read <name> --lines 5` shows Pi's footer with the session name.
@@ -48,6 +48,8 @@ The alternative, a named shell with Pi started inside it, keeps the tab after Pi
 | `reporter` | main | `~/workspaces` | `01a1846f-917e-7686-bc54-6dc247f332c1` |
 | `mitchellh` | avalon | `~/workspaces/agentic-avalon-workspace` | `01a09172-2327-7377-8764-f9944b3e110b` |
 | `venus` | venice | `~/workspaces/agentic-venice-workspace` | `01a0a0b9-6dfa-7775-918f-bb89a2181487` |
+| `jeeves` | main | `~/workspaces/jeeves` | `019f4df5-ecec-7d66-8149-6bb2cf1aaf93` |
+| `avalon-reviewer` | avalon | `~/workspaces/agentic-avalon-workspace` | `01a091e1-3d31-72e7-9176-1272cf138ebd` |
 
 Restart one, for example Tao:
 
