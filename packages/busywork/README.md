@@ -1,6 +1,6 @@
 # Busywork
 
-Reminders and heartbeats for a Pi session, shown together in one clickable indicator below the editor.
+Reminders and heartbeats for a Pi session, and notes shared by every Pi agent, shown together in clickable indicators below the editor.
 
 ## Reminders
 
@@ -24,11 +24,25 @@ A heartbeat sends its instruction to the agent on an interval. It starts a turn 
 
 ## Panel
 
-The indicators stay visible when empty: `⏰ No reminders` and `♥ No heartbeats`. Click the reminders indicator or run `/reminders` to manage reminders. Click the heartbeats indicator or run `/heartbeats` to manage heartbeats. Reminders have **Dismiss** and **Snooze**. Heartbeats have **Pause** or **Resume**, and **Stop**. Click a heartbeat name to show its instruction and latest result. When the list is taller than the panel it scrolls with the wheel or Page Up and Page Down, the view follows the focused button, and a scrollbar on the right shows the position. Clicking the scrollbar track pages toward the click.
+The indicators stay visible when empty: `⏰ No reminders`, `♥ No heartbeats` and `📝 No notes`. Click the reminders indicator or run `/reminders` to manage reminders. Click the heartbeats indicator or run `/heartbeats` to manage heartbeats. Reminders have **Dismiss** and **Snooze**. Heartbeats have **Pause** or **Resume**, and **Stop**. Click a heartbeat name to show its instruction and latest result. When the list is taller than the panel it scrolls with the wheel or Page Up and Page Down, the view follows the focused button, and a scrollbar on the right shows the position. Clicking the scrollbar track pages toward the click.
 
 The agent tools `reminder` and `heartbeat` support the same management actions. They should change schedules only when the user asks.
 
 State is saved in the session and restored on resume. Schedules run only while that Pi session is open. A reminder that becomes due while Pi is closed is marked missed.
+
+## Notes
+
+One short Markdown file that every Pi agent keeps in mind: what matters today, decisions, things not to forget. By default it is `~/.pi/agent/busywork/notes.md`; set another absolute or `~/` path in `~/.pi/agent/busywork.json`:
+
+```json
+{ "notes": { "path": "~/notes/pi-notes.md" } }
+```
+
+Click `📝 Notes` below the editor, or run `/notes`, to edit it in a full-screen Markdown editor with a live preview (Mermaid diagrams included). The file's first line is a comment saying that every Pi agent sees it; saving restores the line if it was removed, and it is never sent to the model.
+
+A model sees the notes only when they change. Before each run, busywork checks whether this session's context already holds the current version; if not (an edit from anywhere, including another agent or an outside editor, or compaction dropped the earlier copy), it adds one message with the full notes. Unchanged notes cost nothing.
+
+The `note` tool lets an agent `show`, `append` to, or `replace` the notes when the user asks. `append` adds to the end without rewriting, so concurrent appends both survive. `replace` needs the hash returned by `show` and is refused if the notes changed since. The editor likewise asks before overwriting a file that changed while it was open. Notes are limited to 20,000 characters.
 
 ## Helpers
 

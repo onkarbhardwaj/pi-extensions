@@ -7,11 +7,22 @@ import { pageToward, scrollbar } from './scrollbar.ts';
 import { HEARTBEAT_STATE_TYPE, type Heartbeat, dueHeartbeat, expire, heartbeatStatusText, heartbeatSummary, markRun, nextHeartbeat, parseHeartbeat, parseInterval, restoreHeartbeats, validateName, validatePrompt } from './heartbeats.ts';
 import { STATE_TYPE, type Reminder, describe, markDue, markMissed, nextDue, parseRemind, parseWhen, restore, statusText, validateText } from './core.ts';
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { mkdir } from 'node:fs/promises';
+import { unwatchFile, watchFile } from 'node:fs';
+import { NoteChangedError, type Note, appendNote, lastSentHash, noteBody, noteUpdate, notesPath, notesStatusText, readNote, replaceNote, withMarker } from './notes.ts';
+import { openMdFile } from './editor/md-file.ts';
+import { mdPanel } from './editor/panel.ts';
 import { MEETINGS_STATE_TYPE, commandExists, defaultCommand, loadBusyworkConfig, pruneDismissed, restoreDismissed, runMeetings, syncMeetings } from './meetings.ts';
 
 export default async function (pi: ExtensionAPI) {
-  const { meetings: meetingsConfig } = await loadBusyworkConfig(join(getAgentDir(), 'busywork.json'));
+  const { meetings: meetingsConfig, notes: notesConfig } = await loadBusyworkConfig(join(getAgentDir(), 'busywork.json'));
+  let note: Note | undefined;
+  let notesError: string | undefined;
+  // A bad notes path disables Notes only; reminders and heartbeats keep working.
+  let notesFile = '';
+  try { notesFile = notesPath(notesConfig, getAgentDir()); } catch (error) { notesError = error instanceof Error ? error.message : String(error); }
+  let notesWatched = false;
   let meetingTimer: ReturnType<typeof setTimeout> | undefined;
   let session = 0;
   let dismissedMeetings: string[] = [];
@@ -44,7 +55,7 @@ export default async function (pi: ExtensionAPI) {
     if (!context || context.mode !== 'tui') return;
     const reminderLabel = stateError ? '⏰ state error' : statusText(reminders) ?? '⏰ No reminders';
     const heartbeatLabel = heartbeatError ? '♥ state error' : heartbeatStatusText(heartbeats) ?? '♥ No heartbeats';
-    if (!reminderLabel && !heartbeatLabel) { context.ui.setWidget('pi-reminders', undefined); return; }
+    const notesLabel = notesError ? '📝 notes error' : notesStatusText(note ?? { body: '' });
     const ctx = context;
     const due = reminders.some(reminder => reminder.status !== 'scheduled');
     ctx.ui.setWidget('pi-reminders', (_tui, theme) => ({
@@ -54,19 +65,56 @@ export default async function (pi: ExtensionAPI) {
         const chips = [
           reminderLabel && theme.style(` ${reminderLabel} `, { fg, bg: theme.colors.userMessageBg, bold: due || !!stateError }),
           heartbeatLabel && theme.style(` ${heartbeatLabel} `, { fg, bg: theme.colors.toolSuccessBg, bold: !!heartbeatError }),
+          theme.style(` ${notesLabel} `, { fg, bg: theme.colors.customMessageBg, bold: !!notesError }),
         ].filter(Boolean);
         return [truncateToWidth(chips.join(' '), width)];
       },
       handleMouse(event: any) {
         if (event.type !== 'click' || event.button !== 'left') return;
-        const reminderWidth = reminderLabel ? visibleWidth(` ${reminderLabel} `) : 0;
-        const section = reminderLabel && event.x < reminderWidth ? 'reminders' : heartbeatLabel && event.x >= (reminderLabel ? reminderWidth + 1 : 0) ? 'heartbeats' : undefined;
+        // Chips are separated by one space; a click on a gap selects nothing.
+        const chips: [string, 'reminders' | 'heartbeats' | 'notes'][] = [[reminderLabel, 'reminders'], [heartbeatLabel, 'heartbeats'], [notesLabel, 'notes']];
+        let x = 0, section: 'reminders' | 'heartbeats' | 'notes' | undefined;
+        for (const [label, name] of chips) {
+          const size = visibleWidth(` ${label} `);
+          if (event.x >= x && event.x < x + size) { section = name; break; }
+          x += size + 1;
+        }
         if (!section) return;
-        void manage(ctx, section).catch(error => ctx.ui.notify(String(error), 'error'));
+        const open = section === 'notes' ? editNotes(ctx) : manage(ctx, section);
+        void open.catch(error => ctx.ui.notify(String(error), 'error'));
         return { handled: true, render: false };
       },
     }), { placement: 'belowEditor' });
   };
+
+  async function refreshNote(): Promise<Note | undefined> {
+    if (!notesFile) { render(); return undefined; }
+    try { note = await readNote(notesFile); notesError = undefined; }
+    catch (error) { notesError = error instanceof Error ? error.message : String(error); note = undefined; }
+    render();
+    return note;
+  }
+
+  // The note is shared, so other agents and editors change it; a cheap stat poll keeps the indicator current.
+  function watchNotes() {
+    if (notesWatched || !notesFile) return;
+    notesWatched = true;
+    watchFile(notesFile, { interval: 2000 }, () => void refreshNote());
+  }
+
+  async function editNotes(ctx: ExtensionContext) {
+    if (panelOpen || ctx.mode !== 'tui') return;
+    if (!notesFile) throw new Error(notesError ?? 'Notes are not configured.');
+    panelOpen = true;
+    try {
+      await mkdir(dirname(notesFile), { recursive: true });
+      const file = await openMdFile(notesFile);
+      // Show the marker as the file's first line; saving restores it if it was deleted.
+      const opened = { ...file, text: withMarker(file.text) };
+      await ctx.ui.custom<void>((tui, theme, _keys, done) => mdPanel(tui, theme, done, opened, { title: 'Notes', prepare: withMarker, previewText: noteBody }),
+        { overlay: true, overlayOptions: { width: '95%', maxHeight: '90%', anchor: 'center' } });
+    } finally { panelOpen = false; await refreshNote(); }
+  }
 
   function load(ctx: ExtensionContext, startup = false) {
     context = ctx;
@@ -375,8 +423,17 @@ export default async function (pi: ExtensionAPI) {
     dismissedMeetings = pruneDismissed(restoreDismissed(ctx.sessionManager.getEntries()));
     session++;
     if (ctx.mode === 'tui') void syncMeetingReminders(session);
+    void refreshNote();
+    watchNotes();
   });
   pi.on('session_tree', (_event, ctx) => load(ctx));
+  // Send the note only when this model has not seen its current version (an edit, or compaction dropped it).
+  pi.on('before_agent_start', async (_event, ctx) => {
+    const current = await refreshNote();
+    if (!current) return;
+    const message = noteUpdate(current, lastSentHash(ctx.sessionManager.buildContextEntries()));
+    return message ? { message } : undefined;
+  });
   pi.on('agent_end', event => {
     if (!runningHeartbeat) return;
     const id = runningHeartbeat;
@@ -387,7 +444,7 @@ export default async function (pi: ExtensionAPI) {
     if (heartbeats.some(beat => beat.id === id)) saveHeartbeats(heartbeats.map(beat => beat.id === id ? { ...beat, lastResult } : beat));
   });
   pi.on('agent_settled', () => { schedule(); scheduleHeartbeat(); });
-  pi.on('session_shutdown', () => { session++; clearTimer(); if (meetingTimer) clearTimeout(meetingTimer); meetingTimer = undefined; if (heartbeatTimer) clearTimeout(heartbeatTimer); heartbeatTimer = undefined; runningHeartbeat = undefined; context?.ui.setWidget('pi-reminders', undefined); context = undefined; });
+  pi.on('session_shutdown', () => { session++; clearTimer(); if (meetingTimer) clearTimeout(meetingTimer); meetingTimer = undefined; if (heartbeatTimer) clearTimeout(heartbeatTimer); heartbeatTimer = undefined; runningHeartbeat = undefined; if (notesWatched) unwatchFile(notesFile); notesWatched = false; context?.ui.setWidget('pi-reminders', undefined); context = undefined; });
 
   pi.registerCommand('remind', {
     description: 'Schedule a session reminder: /remind <30m|2h|15:30|ISO date> <text>',
@@ -442,6 +499,48 @@ export default async function (pi: ExtensionAPI) {
       if (params.every !== undefined || params.until !== undefined || params.instruction !== undefined) throw new Error(`${params.action} accepts name only.`);
       setHeartbeat(params.name, params.action);
       return { content: [{ type: 'text', text: `Heartbeat ${params.name}: ${params.action}.` }], details: { name: params.name, action: params.action } };
+    },
+  });
+  pi.registerCommand('notes', {
+    description: 'Edit the shared notes every Pi agent keeps in context.',
+    handler: async (_args, ctx) => { context = ctx; try { await editNotes(ctx); } catch (error) { ctx.ui.notify(error instanceof Error ? error.message : String(error), 'error'); } },
+  });
+  pi.registerTool({
+    name: 'note',
+    label: 'Notes',
+    description: 'Read or change the shared Markdown notes that every Pi agent keeps in context. Change them only when the user asks; suggesting an addition is fine. Keep them short, because every agent carries them. Use append to add; replace rewrites everything and needs the hash from show.',
+    parameters: Type.Object({
+      action: Type.Union([Type.Literal('show'), Type.Literal('append'), Type.Literal('replace')]),
+      text: Type.Optional(Type.String({ description: 'For append: text to add at the end. For replace: the complete new notes.' })),
+      hash: Type.Optional(Type.String({ description: 'For replace: the hash returned by show; refused if the notes changed since.' })),
+    }, { additionalProperties: false }),
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    async execute(_id, params, _signal, _update, ctx) {
+      context = ctx;
+      if (!notesFile) throw new Error(notesError ?? 'Notes are not configured.');
+      const result = (current: Note, text: string) => {
+        note = current; notesError = undefined; render();
+        return { content: [{ type: 'text' as const, text }], details: { path: current.path, hash: current.hash } };
+      };
+      if (params.action === 'show') {
+        if (params.text !== undefined || params.hash !== undefined) throw new Error('show takes no text or hash.');
+        const current = await readNote(notesFile);
+        return result(current, JSON.stringify({ path: current.path, hash: current.hash, notes: current.body }));
+      }
+      if (params.text === undefined) throw new Error(`${params.action} requires text.`);
+      if (params.action === 'append') {
+        if (params.hash !== undefined) throw new Error('append takes text only.');
+        const current = await appendNote(notesFile, params.text);
+        return result(current, `Appended to notes (hash ${current.hash}).`);
+      }
+      if (!params.hash) throw new Error('replace requires the hash from show.');
+      try {
+        const current = await replaceNote(notesFile, params.text, params.hash);
+        return result(current, `Replaced notes (hash ${current.hash}).`);
+      } catch (error) {
+        if (error instanceof NoteChangedError) throw new Error(`${error.message} Current hash: ${error.current.hash}.`);
+        throw error;
+      }
     },
   });
   pi.registerTool({

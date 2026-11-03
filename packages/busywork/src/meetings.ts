@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Reminder } from './core.ts';
+import { parseNotesConfig, type NotesConfig } from './notes.ts';
 
 export const MEETINGS_STATE_TYPE = 'pi-busywork-meetings';
 export type MeetingStatus = 'accepted' | 'tentative' | 'declined' | 'invited' | 'organizer' | 'own' | 'unknown';
@@ -48,16 +49,16 @@ export function parseMeetingsConfig(value: unknown): MeetingsConfig {
   return config;
 }
 
-export async function loadBusyworkConfig(path: string): Promise<{ meetings: MeetingsConfig }> {
+export async function loadBusyworkConfig(path: string): Promise<{ meetings: MeetingsConfig; notes: NotesConfig }> {
   let source: string;
   try { source = await readFile(path, 'utf8'); }
   catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { meetings: { ...DEFAULT_MEETINGS } };
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { meetings: { ...DEFAULT_MEETINGS }, notes: {} };
     throw error;
   }
   const value = JSON.parse(source);
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Busywork config must be a JSON object.');
-  return { meetings: parseMeetingsConfig(value.meetings) };
+  return { meetings: parseMeetingsConfig(value.meetings), notes: parseNotesConfig(value.notes) };
 }
 
 export function parseMeetings(stdout: string): Meeting[] {

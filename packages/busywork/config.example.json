@@ -3,6 +3,15 @@
     "enabled": true,
     "leadMinutes": 5,
     "intervalMinutes": 15,
-    "statuses": ["accepted", "tentative", "organizer", "invited", "unknown"]
+    "statuses": [
+      "accepted",
+      "tentative",
+      "organizer",
+      "invited",
+      "unknown"
+    ]
+  },
+  "notes": {
+    "path": "~/.pi/agent/busywork/notes.md"
   }
 }
