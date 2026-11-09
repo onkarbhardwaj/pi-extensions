@@ -1,0 +1,50 @@
+:root {
+  --bg: #eef0f3;
+  --panel: #ffffff;
+  --ink: #1d2330;
+  --muted: #6b7280;
+  --line: #d6dae1;
+  --accent: #3b6ef5;
+  --resolved: #9aa3b2;
+  --shadow: 0 1px 2px rgba(20, 28, 45, 0.08), 0 8px 24px rgba(20, 28, 45, 0.08);
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+button { font: inherit; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+button:disabled { opacity: 0.5; cursor: default; }
+.muted { color: var(--muted); }
+
+.bar { position: fixed; inset: 0 0 auto 0; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); z-index: 10; }
+.bar .spacer { flex: 1; }
+.banner, .notice { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); padding: 6px 12px; border-radius: 6px; z-index: 11; box-shadow: var(--shadow); }
+.banner { background: #fff4e5; border: 1px solid #f0c27a; }
+.notice { background: var(--panel); border: 1px solid var(--line); }
+
+.viewport { position: absolute; inset: 44px 0 0 0; overflow: hidden; cursor: grab; touch-action: none; }
+.viewport.panning { cursor: grabbing; }
+.world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+
+.frame { position: absolute; }
+.frame .title { height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 4px; cursor: move; user-select: none; white-space: nowrap; }
+.frame .title .size { color: var(--muted); font-size: 12px; }
+.frame .title .count { color: var(--accent); font-size: 12px; }
+.frame .body { position: relative; background: #fff; box-shadow: var(--shadow); border-radius: 4px; overflow: hidden; }
+.frame iframe { display: block; border: 0; width: 100%; height: 100%; background: #fff; }
+.frame .shield { position: absolute; inset: 0; cursor: crosshair; display: none; }
+body.commenting .frame .shield { display: block; }
+
+.pin { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50% 50% 50% 0; background: var(--accent); color: #fff; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 2px solid #fff; box-shadow: var(--shadow); z-index: 2; }
+.pin.resolved { background: var(--resolved); }
+
+.popover { position: fixed; width: 300px; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); z-index: 20; }
+.popover textarea { width: 100%; min-height: 80px; font: inherit; padding: 6px; border: 1px solid var(--line); border-radius: 6px; resize: vertical; }
+.popover .text { white-space: pre-wrap; margin: 0 0 8px; }
+.popover .meta { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.popover .actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px; }
+
+.index { max-width: 640px; margin: 64px auto; padding: 0 16px; }
+.index a { color: var(--accent); }

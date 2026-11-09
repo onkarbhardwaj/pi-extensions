@@ -1,0 +1,6 @@
+{
+  "port": 4848,
+  "storage": "~/.pi/agent/canvas",
+  "comments": "live",
+  "browser": { "cdp": "http://127.0.0.1:9222" }
+}

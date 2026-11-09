@@ -45,6 +45,16 @@ export default async function (pi: ExtensionAPI) {
     render();
     schedule();
   };
+  // Chips from other extensions share this row (see "Chips from other extensions" in the README).
+  const externalChips = new Map<string, { id: string; label: string }>();
+  const chipText = (value: unknown) => typeof value === 'string' ? value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 60) : '';
+  pi.events.on('chips:hello', () => pi.events.emit('chips:ready', {}));
+  pi.events.on('chips:set', (data: any) => {
+    const id = chipText(data?.id), label = chipText(data?.label);
+    if (!id || !label) return;
+    externalChips.set(id, { id, label }); render();
+  });
+  pi.events.on('chips:remove', (data: any) => { if (externalChips.delete(chipText(data?.id))) render(); });
   const saveHeartbeats = (next: Heartbeat[]) => {
     heartbeats = next;
     pi.appendEntry(HEARTBEAT_STATE_TYPE, { version: 1, heartbeats });
@@ -58,6 +68,7 @@ export default async function (pi: ExtensionAPI) {
     const notesLabel = notesError ? '📝 notes error' : notesStatusText(note ?? { body: '' });
     const ctx = context;
     const due = reminders.some(reminder => reminder.status !== 'scheduled');
+    const extra = [...externalChips.values()];
     ctx.ui.setWidget('pi-reminders', (_tui, theme) => ({
       invalidate() {},
       render(width: number) {
@@ -66,21 +77,23 @@ export default async function (pi: ExtensionAPI) {
           reminderLabel && theme.style(` ${reminderLabel} `, { fg, bg: theme.colors.userMessageBg, bold: due || !!stateError }),
           heartbeatLabel && theme.style(` ${heartbeatLabel} `, { fg, bg: theme.colors.toolSuccessBg, bold: !!heartbeatError }),
           theme.style(` ${notesLabel} `, { fg, bg: theme.colors.customMessageBg, bold: !!notesError }),
+          ...extra.map(chip => theme.style(` ${chip.label} `, { fg, bg: theme.colors.toolPendingBg })),
         ].filter(Boolean);
         return [truncateToWidth(chips.join(' '), width)];
       },
       handleMouse(event: any) {
         if (event.type !== 'click' || event.button !== 'left') return;
         // Chips are separated by one space; a click on a gap selects nothing.
-        const chips: [string, 'reminders' | 'heartbeats' | 'notes'][] = [[reminderLabel, 'reminders'], [heartbeatLabel, 'heartbeats'], [notesLabel, 'notes']];
-        let x = 0, section: 'reminders' | 'heartbeats' | 'notes' | undefined;
+        const chips: [string, string][] = [[reminderLabel, 'reminders'], [heartbeatLabel, 'heartbeats'], [notesLabel, 'notes'], ...extra.map(c => [c.label, `chip:${c.id}`] as [string, string])];
+        let x = 0, section: string | undefined;
         for (const [label, name] of chips) {
           const size = visibleWidth(` ${label} `);
           if (event.x >= x && event.x < x + size) { section = name; break; }
           x += size + 1;
         }
         if (!section) return;
-        const open = section === 'notes' ? editNotes(ctx) : manage(ctx, section);
+        if (section.startsWith('chip:')) { pi.events.emit('chips:click', { id: section.slice(5) }); return { handled: true, render: false }; }
+        const open = section === 'notes' ? editNotes(ctx) : manage(ctx, section as 'reminders' | 'heartbeats');
         void open.catch(error => ctx.ui.notify(String(error), 'error'));
         return { handled: true, render: false };
       },
@@ -418,6 +431,7 @@ export default async function (pi: ExtensionAPI) {
   }
 
   pi.on('session_start', (_event, ctx) => {
+    pi.events.emit('chips:ready', {});
     notifiedDue = new Set();
     load(ctx, true);
     dismissedMeetings = pruneDismissed(restoreDismissed(ctx.sessionManager.getEntries()));

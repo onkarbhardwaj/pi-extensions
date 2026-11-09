@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{canvas}} · canvas</title>
+  <link rel="stylesheet" href="/_/canvas.css">
+</head>
+<body data-canvas="{{canvas}}">
+  <header class="bar">
+    <strong class="name">{{canvas}}</strong>
+    <span id="summary" class="muted"></span>
+    <span class="spacer"></span>
+    <button id="comment" type="button" title="Comment on a frame (C)">Comment</button>
+    <button id="fit" type="button" title="Fit all frames (F)">Fit</button>
+    <button id="zoomout" type="button" title="Zoom out (−)">−</button>
+    <span id="zoom" class="muted">100%</span>
+    <button id="zoomin" type="button" title="Zoom in (+)">+</button>
+  </header>
+  <div id="banner" class="banner" hidden>Disconnected. Comments and moves can't be saved until a Pi session uses the canvas again; this page reconnects by itself.</div>
+  <div id="notice" class="notice" hidden></div>
+  <div id="viewport" class="viewport"><div id="world" class="world"></div></div>
+  <div id="popover" class="popover" hidden></div>
+  <script type="module" src="/_/canvas.js"></script>
+</body>
+</html>
