@@ -44,6 +44,16 @@ A model sees the notes only when they change. Before each run, busywork checks w
 
 The `note` tool lets an agent `show`, `append` to, or `replace` the notes when the user asks. `append` adds to the end without rewriting, so concurrent appends both survive. `replace` needs the hash returned by `show` and is refused if the notes changed since. The editor likewise asks before overwriting a file that changed while it was open. Notes are limited to 20,000 characters.
 
+## Chips from other extensions
+
+Other extensions can show a chip in the same row through Pi's shared event bus, instead of adding a bar of their own:
+
+- emit `chips:hello`; busywork answers `chips:ready` (and also emits it at session start);
+- emit `chips:set` with `{ id, label }` to add or change a chip, and `chips:remove` with `{ id }` to take it away;
+- a click on the chip emits `chips:click` with `{ id }`; the owning extension opens its own view.
+
+Labels are plain text, at most 60 characters. Without busywork, an extension should fall back to Pi's status line.
+
 ## Helpers
 
 `helpers/meetings.swift` lists one day's macOS Calendar meetings with your RSVP status
