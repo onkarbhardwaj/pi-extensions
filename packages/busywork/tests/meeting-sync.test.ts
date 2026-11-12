@@ -22,6 +22,7 @@ function fakePi() {
     registerCommand: () => {},
     appendEntry: () => {},
     sendUserMessage: () => {},
+    events: { on: () => {}, emit: () => {} },
   };
   return { pi, handlers, tools };
 }
