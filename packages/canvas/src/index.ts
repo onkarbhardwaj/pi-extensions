@@ -66,8 +66,8 @@ export default function (pi: ExtensionAPI) {
       }
     } catch { label = '🖼 Canvas error'; }
     if (configError) label = '🖼 Canvas settings error';
-    if (chipRow) { context.ui.setStatus?.(CHIP_ID, undefined); pi.events.emit('chips:set', { id: CHIP_ID, label, tone: 'canvas' }); }
-    else context.ui.setStatus?.(CHIP_ID, label);
+    if (chipRow) { context.ui?.setStatus?.(CHIP_ID, undefined); pi.events.emit('chips:set', { id: CHIP_ID, label, tone: 'canvas' }); }
+    else context.ui?.setStatus?.(CHIP_ID, label);
   }
 
   // busywork answers chips:hello with chips:ready, and asks again on its own session start.
