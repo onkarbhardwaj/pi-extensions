@@ -38,7 +38,7 @@ export default async function (pi: ExtensionAPI) {
   function refreshChip() {
     const ui = context?.ui;
     if (!ui) return;
-    const label = queueError ? '👀 queue error' : chipLabel(entries, statuses);
+    const label = queueError ? 'PRs ⚠ queue error' : chipLabel(entries, statuses);
     if (chipRow) { ui.setStatus?.(CHIP_ID, undefined); pi.events.emit('chips:set', { id: CHIP_ID, label }); }
     else ui.setStatus?.(CHIP_ID, label);
   }

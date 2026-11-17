@@ -8,7 +8,7 @@ export const SECTION_TITLE: Record<Section, string> = { review: '👀 To review'
 export function chipLabel(entries: Entry[], statuses: Map<string, StatusResult>) {
   const open = entries.filter(entry => !isDone(statuses.get(entry.id)?.status));
   const count = (section: Section) => open.filter(entry => entry.section === section).length;
-  return `👀 ${count('review')} · ⏳ ${count('waiting')}`;
+  return `PRs 👀 ${count('review')} · ⏳ ${count('waiting')}`;
 }
 
 export type Grouped = { review: Entry[]; waiting: Entry[]; done: Entry[] };

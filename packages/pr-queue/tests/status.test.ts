@@ -42,7 +42,7 @@ test('the chip counts open PRs to review and waiting; done PRs leave their secti
   for (const [ref, section, priority] of [['acme/widgets#1', 'review', 'low'], ['acme/widgets#2', 'review', 'high'], ['acme/widgets#3', 'waiting', undefined], ['acme/widgets#4', 'review', undefined]] as const)
     queue = addEntry(queue, parseRef(ref), { section, ...(priority ? { priority } : {}) }).queue;
   const statuses = new Map([['acme/widgets#4', { status: toStatus(pr({ state: 'MERGED' })), checkedAt: 0 }]]);
-  assert.equal(chipLabel(queue.entries, statuses), '👀 2 · ⏳ 1');
+  assert.equal(chipLabel(queue.entries, statuses), 'PRs 👀 2 · ⏳ 1');
   const grouped = group(queue.entries, statuses);
   assert.deepEqual(grouped.review.map(e => e.number), [2, 1]);
   assert.deepEqual(grouped.done.map(e => e.number), [4]);

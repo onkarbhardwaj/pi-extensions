@@ -19,7 +19,7 @@ From this repository, use `pi -e ./packages/pr-queue` for one run or
 A chip shows how many PRs are left to review and how many are waiting on someone else:
 
 ```text
-👀 3 · ⏳ 2
+PRs 👀 3 · ⏳ 2
 ```
 
 With [Busywork](../busywork/README.md) loaded, the chip joins its row; otherwise it appears in
