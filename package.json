@@ -17,7 +17,8 @@
       "./packages/annotate/src/index.ts",
       "./packages/reference-widget/src/index.ts",
       "./packages/select-messages/src/index.ts",
-      "./packages/canvas/src/index.ts"
+      "./packages/canvas/src/index.ts",
+      "./packages/pr-queue/src/index.ts"
     ]
   }
 }
