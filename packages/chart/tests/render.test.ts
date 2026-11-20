@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ChartError, renderChart, revive } from '../src/render.ts';
-import { slug } from '../src/index.ts';
+import chartExtension, { slug } from '../src/index.ts';
 
 const PNG = [0x89, 0x50, 0x4e, 0x47];
 
@@ -61,4 +61,20 @@ test('limits: grid size, image size, style, data volume, bad dates', async () =>
 test('file names come from the chart name', () => {
   assert.equal(slug('Request latency, October'), 'request-latency-october');
   assert.equal(slug('!!!'), 'chart');
+});
+
+test('the tool schema uses no tuple form, which JSON Schema 2020-12 rejects', () => {
+  let parameters: unknown;
+  chartExtension({ registerTool: (tool: { parameters: unknown }) => { parameters = tool.parameters; } } as never);
+  const tupleForms: string[] = [];
+  const walk = (node: unknown, path: string): void => {
+    if (Array.isArray(node)) return node.forEach((child, i) => walk(child, `${path}[${i}]`));
+    if (node === null || typeof node !== 'object') return;
+    for (const [key, value] of Object.entries(node)) {
+      if ((key === 'items' && Array.isArray(value)) || key === 'additionalItems') tupleForms.push(`${path}.${key}`);
+      walk(value, `${path}.${key}`);
+    }
+  };
+  walk(parameters, '$');
+  assert.deepEqual(tupleForms, []);
 });
