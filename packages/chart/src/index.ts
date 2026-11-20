@@ -25,7 +25,7 @@ Compute the data first (in code if you need to); pass numbers, not formulas. Loo
 
 export default function (pi: ExtensionAPI) {
   pi.registerTool({
-    name: 'chart',
+    name: 'chart_render',
     label: 'Chart',
     description: DESCRIPTION,
     parameters: Type.Object(

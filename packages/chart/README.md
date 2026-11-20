@@ -1,6 +1,6 @@
 # Chart
 
-Draw charts with matplotlib's API, without Python. The agent writes the chart as a list of matplotlib calls, the `chart` tool renders it with [mpljs](https://github.com/ivarvong/mpl) (a pure-JavaScript reproduction of matplotlib's output by Ivar Vong), saves the image, and shows it to the agent so it can check what it drew.
+Draw charts with matplotlib's API, without Python. The agent writes the chart as a list of matplotlib calls, the `chart_render` tool renders it with [mpljs](https://github.com/ivarvong/mpl) (a pure-JavaScript reproduction of matplotlib's output by Ivar Vong), saves the image, and shows it to the agent so it can check what it drew.
 
 Everything runs in-process: no Python, no browser, no network service.
 
@@ -16,7 +16,7 @@ Charts are saved to `~/.pi/agent/charts/<date>/<name>.png` (or `.svg`); nothing 
 
 ## The tool
 
-`chart` takes one list of matplotlib calls per panel. Each call is `["method", ...args]`, with keyword arguments as a final object:
+`chart_render` takes one list of matplotlib calls per panel. Each call is `["method", ...args]`, with keyword arguments as a final object:
 
 ```json
 {
