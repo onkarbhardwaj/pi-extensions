@@ -40,7 +40,7 @@ export default function (pi: ExtensionAPI) {
         sharex: Type.Optional(Type.Boolean()),
         sharey: Type.Optional(Type.Boolean()),
         style: Type.Optional(Type.Union(STYLES.map((style) => Type.Literal(style)), { description: 'Default pro-slate.' })),
-        figsize: Type.Optional(Type.Tuple([Type.Number(), Type.Number()], { description: 'Inches, default [8, 4.5].' })),
+        figsize: Type.Optional(Type.Array(Type.Number(), { minItems: 2, maxItems: 2, description: 'Inches, default [8, 4.5].' })),
         dpi: Type.Optional(Type.Integer({ minimum: 50, maximum: 300, description: 'Default 150.' })),
         format: Type.Optional(Type.Union([Type.Literal('png'), Type.Literal('svg')], { description: 'Default png. SVG is saved but not shown to you.' })),
       },
