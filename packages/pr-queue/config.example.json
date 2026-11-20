@@ -1,0 +1,5 @@
+{
+  "ci": {
+    "acme/widgets": { "ignore": ["advisory-bot", "legacy-lint"] }
+  }
+}

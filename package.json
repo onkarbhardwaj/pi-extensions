@@ -18,6 +18,7 @@
       "./packages/reference-widget/src/index.ts",
       "./packages/select-messages/src/index.ts",
       "./packages/canvas/src/index.ts",
+      "./packages/pr-queue/src/index.ts",
       "./packages/chart/src/index.ts"
     ]
   }
