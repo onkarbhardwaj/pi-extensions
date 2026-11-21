@@ -53,6 +53,31 @@ test('outside edits are detected; directories, large and binary files are refuse
   await writeFile(join(dir, 'big.md'), 'x'.repeat(2 * 1024 * 1024 + 1));
   await assert.rejects(openMdFile(join(dir, 'big.md')), /larger than 2 MB/);
   await assert.rejects(openMdFile(join(dir, 'missing', 'x.md')), /does not exist/);
-  // /dev is its own file system on macOS and Linux, standing in for an external volume.
-  await assert.rejects(openMdFile('/dev/pi-md-test.md'), /another volume/);
+});
+
+test('files on another filesystem can be created and replaced without temporary leftovers', async t => {
+  const tempDevice = (await stat(tmpdir())).dev;
+  let dir: string | undefined;
+  for (const candidate of [process.cwd(), '/dev/shm']) {
+    try {
+      if ((await stat(candidate)).dev === tempDevice) continue;
+      dir = await mkdtemp(join(candidate, '.md-file-volume-'));
+      break;
+    } catch { /* No writable second filesystem here; try the next candidate. */ }
+  }
+  if (!dir) return t.skip('No writable filesystem distinct from the system temp folder.');
+  t.after(() => rm(dir!, { recursive: true, force: true }));
+  const path = join(dir, 'notes.md');
+  const created = await saveMdFile(await openMdFile(path), 'first');
+  await chmod(path, 0o600);
+  await saveMdFile(created, 'updated');
+  assert.equal(await readFile(path, 'utf8'), 'updated\n');
+  assert.equal((await stat(path)).mode & 0o777, 0o600);
+  assert.deepEqual(await readdir(dir), ['notes.md']);
+});
+
+test('a failed replacement cleans up the temporary file', async t => {
+  const dir = await folder(t);
+  await assert.rejects(saveMdFile({ path: dir, text: '', exists: false, crlf: false }, 'new'));
+  assert.deepEqual(await readdir(dir), []);
 });

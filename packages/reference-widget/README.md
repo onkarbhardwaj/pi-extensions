@@ -84,10 +84,10 @@ Nothing is sent to the model.
   undo key) undoes and Ctrl+Shift+Z redoes. Click to place the cursor; the wheel scrolls.
 - Tab moves between the editor and the buttons. **Save** writes the file; Esc closes and
   asks for a second Esc when there are unsaved changes.
-- Saving writes a flushed temporary file in the system temp folder and renames it onto the
-  document, so a crash never leaves a half-written file. It keeps line endings and
-  permissions and writes through symlinks. Files on another volume than the temp folder
-  (external drives, network shares) are refused. If the file changed on disk since it was opened, the first
+- Saving writes a flushed temporary file beside the resolved document and atomically renames
+  it onto the document, so readers never see a half-written file. It keeps line endings and
+  permissions and writes through symlinks. The destination folder must allow temporary file
+  creation and replacement; it need not share a volume with the system temp folder. If the file changed on disk since it was opened, the first
   Save warns and a second Save overwrites it. Files over 2 MB or with binary content are
   refused.
 
