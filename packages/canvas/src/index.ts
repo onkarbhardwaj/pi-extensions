@@ -56,23 +56,27 @@ export default function (pi: ExtensionAPI) {
   // ---------- indicator ----------
 
   async function refreshChip() {
-    if (!context || !config) return;
+    // The session can end while the reads below are pending (at once under `pi -p`),
+    // and session_shutdown clears `context`; draw only for the session that asked.
+    const session = context;
+    if (!session || !config) return;
     let label = '🖼 Canvas';
     try {
-      const name = await lastCanvasFor(config.storage, context.cwd);
+      const name = await lastCanvasFor(config.storage, session.cwd);
       if (name && await canvasExists(config.storage, name)) {
         const [manifest, comments] = await Promise.all([readManifest(config.storage, name), readComments(config.storage, name)]);
         label = statusText(manifest.frames.length, comments.filter(c => c.state === 'open').length);
       }
     } catch { label = '🖼 Canvas error'; }
     if (configError) label = '🖼 Canvas settings error';
-    if (chipRow) { context.ui?.setStatus?.(CHIP_ID, undefined); pi.events.emit('chips:set', { id: CHIP_ID, label, tone: 'canvas' }); }
-    else context.ui?.setStatus?.(CHIP_ID, label);
+    if (context !== session) return;
+    if (chipRow) { session.ui?.setStatus?.(CHIP_ID, undefined); pi.events.emit('chips:set', { id: CHIP_ID, label, tone: 'canvas' }); }
+    else session.ui?.setStatus?.(CHIP_ID, label);
   }
 
   // busywork answers chips:hello with chips:ready, and asks again on its own session start.
   pi.events.on('chips:ready', () => { chipRow = true; void refreshChip(); });
-  pi.events.on('chips:click', (data: any) => { if (data?.id === CHIP_ID && context) void openCanvas(context).catch(error => context.ui.notify(String(error?.message ?? error), 'error')); });
+  pi.events.on('chips:click', (data: any) => { const session = context; if (data?.id === CHIP_ID && session) void openCanvas(session).catch(error => session.ui?.notify?.(String(error?.message ?? error), 'error')); });
 
   // ---------- actions ----------
 
