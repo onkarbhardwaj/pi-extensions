@@ -43,7 +43,7 @@ and help me set it up.”
 From a checkout:
 
 ```sh
-npm install --ignore-scripts --legacy-peer-deps
+npm ci --ignore-scripts
 npm test
 npm run pack:check
 ```
